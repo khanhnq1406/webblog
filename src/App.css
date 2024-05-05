@@ -36,3 +36,19 @@
     transform: rotate(360deg);
   }
 }
+
+h1 {
+  text-align: center;
+}
+
+.content img {
+  max-width: 100%;
+}
+
+.heading {
+  cursor: pointer;
+}
+
+.heading img {
+  width: 20px;
+}
