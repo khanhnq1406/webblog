@@ -8,6 +8,8 @@ const Gym = () => {
     day1: "none",
     day2: "none",
     day3: "none",
+    day4: "none",
+    day5: "none",
   });
   const displayContentHandle = (event, day) => {
     event.preventDefault();
@@ -19,11 +21,22 @@ const Gym = () => {
 
   return (
     <>
-      <h1>Lịch tập gym 3 buổi/tuần</h1>
+      <h1>Lịch tập gym 5 buổi/tuần</h1>
       <div>
-        <li>Buổi 1 (Pull day): cơ lưng, tay trước và cẳng tay</li>
-        <li>Buổi 2 (Push day): cơ ngực, cơ vai và cơ tay sau</li>
+        <li>
+          Buổi 1 (Pull day): cơ lưng, tay trước và cẳng tay - Tập trung tay
+          trước
+        </li>
+        <li>
+          Buổi 2 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung ngực
+        </li>
         <li>Buổi 3 (Legs Day): cơ chân, mông, bắp chân và cơ bụng</li>
+        <li>
+          Buổi 4 (Pull day): cơ lưng, tay trước và cẳng tay - Tập trung lưng
+        </li>
+        <li>
+          Buổi 5 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung tay sau
+        </li>
         <h4>3 SET - 8-12 REP - Nghỉ 2 phút mỗi set</h4>
       </div>
       <div className="content">
@@ -34,7 +47,57 @@ const Gym = () => {
           Buổi 1: Tập cơ lưng xô, tay trước và cẳng tay{" "}
           <img src={`${resources}/down-arrow.png`} />
         </h2>
+
         <div style={{ display: hidden.day1 }}>
+          <h3>Incline Dumbbell Curl</h3>
+          <li>Bước 1: Điều chỉnh ghế tập nghiêng khoảng 30 độ.</li>
+          <li>
+            Bước 2: Ngồi vào ghế, lưng tựa ra sau, hai tay cầm tạ đơn sao cho
+            lòng bàn tay hướng vào nhau, cánh tay duỗi thẳng, hai chân trụ trên
+            mặt sàn.
+          </li>
+          <li>
+            Bước 3: Thở ra, dùng lực từ bắp tay cuốn tạ lên trên đến khi tạ
+            ngang vai.
+          </li>
+          <li>
+            Bước 4: Hít vào, từ từ đưa ta về vị trí ban đầu. Tiếp tục lặp lại
+            các động tác.
+          </li>
+          <img src="gym/Incline-Dumbbell-Curl-resized.webp" />
+
+          <h3>Zottman Curl</h3>
+          <li>
+            Bước 1: Thẳng lưng, mỗi tay cầm một quả tạ và lòng bàn tay hướng về
+            phía trước.
+          </li>
+          <li>
+            Bước 2: Bắp tay cố định, nâng tạ lên ngang vai, sau đó xoay cổ tay
+            sao cho lòng bàn tay hướng ra ngoài.
+          </li>
+          <li>Bước 3: Từ từ hạ tay xuống vị trí ban đầu.</li>
+          <li>
+            Bước 4: Lặp lại các động tác trên khoảng 2 - 3 hiệp, mỗi hiệp 10 -
+            12 lần.
+          </li>
+          <img src="gym/zottman-curl.jpg" />
+
+          <h3>Standing Barbell Curl </h3>
+          <li>
+            Bước 1: Đứng thẳng, hai chân dang rộng bằng vai, tay cầm thanh tạ
+            đòn ngang đùi đảm bảo lòng bàn tay hướng về phía trước.
+          </li>
+          <li>
+            Bước 2: Thở ra, gập tay lên trước ngực. Lưu ý, chỉ chuyển động cẳng
+            tay, giữ nguyên vị trí bắp tay.
+          </li>
+          <li>
+            Bước 3: Hít vào, đưa thanh tạ về vị trí ban đầu. Tiếp tục lặp lại
+            các động tác 12 - 15 lần/hiệp, 2 - 3 hiệp/buổi tập.
+          </li>
+          <img src="gym/Barbell-Curl.gif" />
+          <img src="gym/barbell-curl-resized.webp" />
+
           <h3>Lat pull down</h3>
           <li>
             Bước 1: Ngồi trên máy kéo cáp, chân cố định dưới thanh chắn, lưng
@@ -88,21 +151,7 @@ const Gym = () => {
           </li>
           <img src="gym/15244.gif" style={{ minWidth: "300px" }} />
           <img src="gym/Cable-Seated-Wide-grip-Row-resized.webp" />
-          <h3>Standing Barbell Curl </h3>
-          <li>
-            Bước 1: Đứng thẳng, hai chân dang rộng bằng vai, tay cầm thanh tạ
-            đòn ngang đùi đảm bảo lòng bàn tay hướng về phía trước.
-          </li>
-          <li>
-            Bước 2: Thở ra, gập tay lên trước ngực. Lưu ý, chỉ chuyển động cẳng
-            tay, giữ nguyên vị trí bắp tay.
-          </li>
-          <li>
-            Bước 3: Hít vào, đưa thanh tạ về vị trí ban đầu. Tiếp tục lặp lại
-            các động tác 12 - 15 lần/hiệp, 2 - 3 hiệp/buổi tập.
-          </li>
-          <img src="gym/Barbell-Curl.gif" />
-          <img src="gym/barbell-curl-resized.webp" />
+
           <h3> Preacher Curl </h3>
           <li>
             Bước 1: Ngồi lên ghế tập, hai tay cầm thanh tạ đòn sao cho lòng bàn
@@ -118,38 +167,6 @@ const Gym = () => {
             tục lặp lại các động tác.
           </li>
           <img src="gym/Machine-preacher-curl-resized.webp" />
-          <h3>Incline Dumbbell Curl</h3>
-          <li>Bước 1: Điều chỉnh ghế tập nghiêng khoảng 30 độ.</li>
-          <li>
-            Bước 2: Ngồi vào ghế, lưng tựa ra sau, hai tay cầm tạ đơn sao cho
-            lòng bàn tay hướng vào nhau, cánh tay duỗi thẳng, hai chân trụ trên
-            mặt sàn.
-          </li>
-          <li>
-            Bước 3: Thở ra, dùng lực từ bắp tay cuốn tạ lên trên đến khi tạ
-            ngang vai.
-          </li>
-          <li>
-            Bước 4: Hít vào, từ từ đưa ta về vị trí ban đầu. Tiếp tục lặp lại
-            các động tác.
-          </li>
-          <img src="gym/Incline-Dumbbell-Curl-resized.webp" />
-
-          <h3>Zottman Curl</h3>
-          <li>
-            Bước 1: Thẳng lưng, mỗi tay cầm một quả tạ và lòng bàn tay hướng về
-            phía trước.
-          </li>
-          <li>
-            Bước 2: Bắp tay cố định, nâng tạ lên ngang vai, sau đó xoay cổ tay
-            sao cho lòng bàn tay hướng ra ngoài.
-          </li>
-          <li>Bước 3: Từ từ hạ tay xuống vị trí ban đầu.</li>
-          <li>
-            Bước 4: Lặp lại các động tác trên khoảng 2 - 3 hiệp, mỗi hiệp 10 -
-            12 lần.
-          </li>
-          <img src="gym/zottman-curl.jpg" />
         </div>
 
         <h2
@@ -160,10 +177,37 @@ const Gym = () => {
           <img src={`${resources}/down-arrow.png`} />
         </h2>
         <div style={{ display: hidden.day2 }}>
-          <h3>Chest Flys Machine</h3>
-          <img src="gym/Machine-Fly-resized.png"></img>
           <h3>Incline Dumbbell Press</h3>
+          <img src="https://www.thethaothientruong.vn/uploads/contents/incline-dumbbell-press.jpg"></img>
+
+          <h3>Cable Chest Fly</h3>
+          <img src="https://i0.wp.com/soma.fitness/wp-content/uploads/2022/04/1cb5e71808ae65b73fd99b633c214c4ede40f5e1.jpg?resize=1024%2C450&ssl=1"></img>
+
+          <h3>Dumbbell bench press</h3>
+          <img src="https://cdn-0.weighttraining.guide/wp-content/uploads/2016/05/Dumbbell-Bench-Press-resized.png?ezimgfmt=ng%3Awebp%2Fngcb4"></img>
+
+          <h3>Triceps rope push-down</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2016/05/Triceps-Rope-Pushdown-resized.png"></img>
+
+          <h3>Seated Dumbbell Shoulder Press</h3>
+          <img src="https://images.squarespace-cdn.com/content/v1/55e406fbe4b0b03c5e7543ae/1492640379861-4YARXK0C5XIKTU2LW2II/Seated+Dumbbell+Shoulder+Press"></img>
         </div>
+
+        <h2
+          className="heading"
+          onClick={(event) => displayContentHandle(event, "day3")}
+        >
+          Buổi 3: Tập chân, mông, đùi{" "}
+          <img src={`${resources}/down-arrow.png`} />
+        </h2>
+
+        <h2
+          className="heading"
+          onClick={(event) => displayContentHandle(event, "day4")}
+        >
+          Buổi 4: Tập cơ lưng, tay trước và cẳng tay - Tập trung lưng
+          <img src={`${resources}/down-arrow.png`} />
+        </h2>
       </div>
     </>
   );
