@@ -25,17 +25,20 @@ const Gym = () => {
       <div>
         <li>
           Buổi 1 (Pull day): cơ lưng, tay trước và cẳng tay - Tập trung tay
-          trước
+          trước - 3 tay/2 lưng
         </li>
         <li>
-          Buổi 2 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung ngực
+          Buổi 2 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung ngực - 3
+          ngực/1 vai/1 tay sau
         </li>
         <li>Buổi 3 (Legs Day): cơ chân, mông, bắp chân và cơ bụng</li>
         <li>
-          Buổi 4 (Pull day): cơ lưng, tay trước và cẳng tay - Tập trung lưng
+          Buổi 4 (Pull day): cơ lưng, tay trước và cẳng tay - Tập trung lưng - 3
+          lưng/2 tay
         </li>
         <li>
-          Buổi 5 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung tay sau
+          Buổi 5 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung tay sau -
+          3 tay sau/1 ngực/1 vai
         </li>
         <h4>3 SET - 8-12 REP - Nghỉ 2 phút mỗi set</h4>
       </div>
@@ -132,41 +135,6 @@ const Gym = () => {
           </li>
           <img src={`${gym}/seated-v-bar-cable-row-exercise.gif`} />
           <img src={`${gym}/seated-cable-row.jpg`} />
-          <h3>Wide Grip Seated Cable Row</h3>
-          <li>
-            Bước 1: Ngồi lên máy tập và chọn mức tạ phù hợp, hai chân đặt lên vị
-            trí bàn đạp. Lưu ý nên để thanh bar cao ngang phần ngực dưới.
-          </li>
-          <li>
-            Bước 2: Giữ lưng thẳng, hạ thấp phần cầu vai và kéo cáp về phía thân
-            người.
-          </li>
-          <li>
-            Bước 3: Giữ nguyên tư thế trên khoảng 1 nhịp và đưa thanh bar về vị
-            trí ban đầu.
-          </li>
-          <li>
-            Bước 4: Lặp lại các động tác trên 12 - 15 lần/hiệp, 2 - 3 hiệp/buổi
-            tập.
-          </li>
-          <img src="gym/15244.gif" style={{ minWidth: "300px" }} />
-          <img src="gym/Cable-Seated-Wide-grip-Row-resized.webp" />
-
-          <h3> Preacher Curl </h3>
-          <li>
-            Bước 1: Ngồi lên ghế tập, hai tay cầm thanh tạ đòn sao cho lòng bàn
-            tay hướng về phía trước. Đồng thời, đặt khủy tay lên đệm nghiêng của
-            ghế.
-          </li>
-          <li>
-            Bước 2: Hít vào, từ từ hạ thanh tạ xuống đến khi cánh tay duỗi
-            thẳng.
-          </li>
-          <li>
-            Bước 3: Thở ra, dùng lực từ bắp tay cuốn tạ lên vị trí ban đầu. Tiếp
-            tục lặp lại các động tác.
-          </li>
-          <img src="gym/Machine-preacher-curl-resized.webp" />
         </div>
 
         <h2
@@ -208,6 +176,63 @@ const Gym = () => {
           Buổi 4: Tập cơ lưng, tay trước và cẳng tay - Tập trung lưng
           <img src={`${resources}/down-arrow.png`} />
         </h2>
+        <div style={{ display: hidden.day4 }}>
+          <h3>Wide Grip Seated Cable Row</h3>
+          <li>
+            Bước 1: Ngồi lên máy tập và chọn mức tạ phù hợp, hai chân đặt lên vị
+            trí bàn đạp. Lưu ý nên để thanh bar cao ngang phần ngực dưới.
+          </li>
+          <li>
+            Bước 2: Giữ lưng thẳng, hạ thấp phần cầu vai và kéo cáp về phía thân
+            người.
+          </li>
+          <li>
+            Bước 3: Giữ nguyên tư thế trên khoảng 1 nhịp và đưa thanh bar về vị
+            trí ban đầu.
+          </li>
+          <li>
+            Bước 4: Lặp lại các động tác trên 12 - 15 lần/hiệp, 2 - 3 hiệp/buổi
+            tập.
+          </li>
+          <img src="gym/15244.gif" style={{ minWidth: "300px" }} />
+          <img src="gym/Cable-Seated-Wide-grip-Row-resized.webp" />
+
+          <h3>Close grip cable pull down</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2016/10/Cable-close-grip-pull-down-resized.png" />
+
+          <h3>Machine one-arm row</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2017/01/Machine-one-arm-row-resized.png" />
+
+          <h3>Cable Bicep Curls</h3>
+          <img src="https://www.dmoose.com/cdn/shop/articles/1_1_42ccb79d-1b2f-4bd6-a9d4-e886fb09fd06.png?v=1646826645" />
+
+          <h3>Standing Dumbbell Preacher Curl</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2017/07/standing-dumbbell-preacher-curl-resized.png" />
+        </div>
+
+        <h2
+          className="heading"
+          onClick={(event) => displayContentHandle(event, "day5")}
+        >
+          Buổi 5 (Push day): cơ ngực, cơ vai và cơ tay sau - Tập trung tay sau
+          <img src={`${resources}/down-arrow.png`} />
+        </h2>
+        <div style={{ display: hidden.day5 }}>
+          <h3>TRICEP SINGLE ARM CABLE PUSHDOWN</h3>
+          <iframe src="https://gymlab.vn/wp-content/uploads/2023/03/720-Cach-tap-tay-sau-mot-tay-voi-day-cap-Ngang-Gymlab.mp4" />
+
+          <h3>Triceps Dips Machine </h3>
+          <img src="https://fitnessprogramer.com/wp-content/uploads/2021/04/Lever-Overhand-Triceps-Dip.gif" />
+
+          <h3>Dumbbell Kickbacks</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2016/05/Dumbbell-Kickback-resized.png" />
+
+          <h3>Dumbbell fly</h3>
+          <img src="https://weighttraining.guide/wp-content/uploads/2016/11/dumbbell-fly-resized.png" />
+
+          <h3>Dumbbell Lateral Raise</h3>
+          <img src="https://www.thethaothientruong.vn/uploads/contents/dumbbell-lateral-raise.jpg" />
+        </div>
       </div>
     </>
   );
