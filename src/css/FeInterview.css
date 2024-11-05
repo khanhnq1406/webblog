@@ -1,0 +1,17 @@
+.fe-interview * {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.fe-interview {
+  background-color: var(--white);
+  padding: 1vw;
+}
+
+.fe-interview h1 {
+  text-align: left;
+}
+
+.fe-interview p {
+  font-weight: normal;
+  margin-left: 1vw;
+}

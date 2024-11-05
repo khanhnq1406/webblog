@@ -52,3 +52,7 @@ h1 {
 .heading img {
   width: 20px;
 }
+
+:root {
+  --white: #f5f7fd;
+}
