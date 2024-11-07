@@ -1,0 +1,11 @@
+.css-cheatsheet * {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.css-cheatsheet {
+  padding: 1vw 15vw;
+}
+.css-cheatsheet code {
+  display: block;
+  white-space: pre-wrap;
+}
