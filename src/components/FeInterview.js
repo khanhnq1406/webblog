@@ -28,6 +28,23 @@ const FeInterview = () => {
             <li>
               <a href="#5">5. DOM (Document Object Model)</a>
             </li>
+            <li>
+              <a href="#6">6. How to add an event listener to an element</a>
+            </li>
+            <li>
+              <a href="#7">
+                7. What is the difference between null and undefined?
+              </a>
+            </li>
+            <li>
+              <a href="#8">
+                8. What is the difference between cookies, sessionStorage, and
+                localStorage?
+              </a>
+            </li>
+            <li>
+              <a href="#9">9. How does the browser render a website?</a>
+            </li>
           </ul>
         </li>
 
@@ -339,6 +356,134 @@ const FeInterview = () => {
         </ul>
       </p>
 
+      {/* ------------------------------------------------------ */}
+
+      <h2 id="6"> 6. How to add an event listener on an element</h2>
+      <p>
+        To add an event listener on an element
+        <ol>
+          <li>
+            <b>"Get" that element</b> through one of the many methods of the
+            document object (i.e. getElementById, etc)
+          </li>
+
+          <li>
+            Use the <b>addEventListener</b> method of the obtained object
+          </li>
+        </ol>
+      </p>
+      <p>
+        The method will receive the event name (i.e. 'click', 'keyup',
+        'mouseup', etc), the event handler function and, optionally, a boolean
+        indicating whether the event should be captured during the capturing
+        phase.
+      </p>
+      <p>
+        For example:
+        <code className="language-js">
+          document.querySelector('.className').addEventListener('click',
+          function (){"{"}
+          {" ... "}
+          {"})"}
+        </code>
+      </p>
+
+      {/* ------------------------------------------------------ */}
+
+      <h2 id="7">7. What is the difference between "null" and "undefined"?</h2>
+      <p>
+        In JavaScript, <b>"undefined"</b> is the default value new variables
+        take, and it means the variable has been defined but it hasn't been
+        assigned any value just yet.
+      </p>
+      <p>
+        And <b>"null"</b> is actually a value that signals "no value" or "no
+        object", it is specifically assigned to the variable by the developer.
+      </p>
+      <p>For example =))</p>
+      <img
+        alt=""
+        src="https://codingnomads.com/images/ef21dcae-9744-4bbe-fe90-8546f7f27700/public"
+      ></img>
+
+      {/* ------------------------------------------------------ */}
+
+      <h2 id="8">
+        8. What is the difference between cookies, sessionStorage, and
+        localStorage?
+      </h2>
+      <p>
+        <b>Cookies</b> are <mark>small pieces of data</mark> stored in web
+        browsers. They are mainly used for keeping information between HTTP
+        requests, such as user authentication, session management, and tracking
+        user behavior. Cookies allow you to set an expiry time at which point it
+        would be deleted.
+      </p>
+      <p>
+        <b>sessionStorage</b> is designed for <mark>temporary storage</mark> and
+        is accessible only within the same session (i.e.., while the browser
+        window or tab is open). Data stored in sessionStorage is{" "}
+        <mark>lost when the browser window is closed.</mark>
+      </p>
+      <p>
+        <b>localStorage</b> is similar to sessionStorage but{" "}
+        <mark>
+          persists even when the browser window or tab is closed and reopened.
+        </mark>
+        It provides <mark>long-term storage</mark> for web applications. They
+        are very similar to cookies, however, the size <mark>limitations</mark>{" "}
+        on localStorage are
+        <mark> quite big</mark> compared to cookies, making it a much better
+        alternative when storing large datasets.
+      </p>
+      <img
+        alt=""
+        src="https://miro.medium.com/v2/resize:fit:720/format:webp/1*1UmPsjJaHEnLOiPHgQ2mFw.jpeg"
+      ></img>
+
+      {/* ------------------------------------------------------ */}
+
+      <h2 id="9">9. How does the browser render a website?</h2>
+      <p>
+        The process of rendering a web page in the browser involves several
+        steps:
+        <ol>
+          <li>Parsing the HTML.</li>
+          <li>Parsing the CSS and applying styles.</li>
+          <li>
+            Calculating the position of each element in the layout of the page.
+          </li>
+          <li>
+            Painting the actual pixels in the screen, while at the same time
+            sorting them into layers.
+          </li>
+          <li>
+            Composing all layers together, to render the website on screen. This
+            step is taking into account z-index values, opacity values and more.
+          </li>
+          <li>Running JavaScript code.</li>
+          <li>Loading the asynchronous resources.</li>
+        </ol>
+      </p>
+      <blockquote>
+        For more information, visit{" "}
+        <a href="https://developer.chrome.com/blog/inside-browser-part3">
+          Inside look at modern web browser (part 3)
+        </a>{" "}
+        or{" "}
+        <a href="https://hacks.mozilla.org/2017/10/the-whole-web-at-maximum-fps-how-webrender-gets-rid-of-jank/">
+          The whole web at maximum FPS: How WebRender gets rid of jank
+        </a>
+      </blockquote>
+      <img
+        src="https://cdn.prod.website-files.com/61ade8b25c29d61e883b12a4/657da9e83ad99312ed70cc37_image%20441.webp"
+        alt=""
+      ></img>
+      <img
+        src="https://hacks.mozilla.org/wp-content/uploads/2017/10/02-500x438.png"
+        alt=""
+        style={{ marginTop: "10px" }}
+      ></img>
       {/* ------------------------------------------------------ */}
 
       <h1>References</h1>
