@@ -1,7 +1,7 @@
 import "./App.css";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Gym from "./components/Gym";
-import FeInterview from "./components/FeInterview";
+import FeInterview from "./components/FeInterview/FeInterview";
 import Home from "./components/Home";
 import CssCheatSheet from "./components/CssCheatSheet";
 function App() {

@@ -1,62 +1,11 @@
 import { useEffect } from "react";
-import "../css/FeInterview.css";
-const FeInterview = () => {
+
+const BasicLevel = () => {
   useEffect(() => {
     window.Prism.highlightAll();
   }, []);
   return (
-    <div className="fe-interview">
-      <h1 style={{ marginTop: 0 }}>Frontend Interview</h1>
-
-      <h1>Table of contents</h1>
-      <ul class="toc">
-        <li>
-          <a href="#basic-level">List of questions at Basic Level</a>
-          <ul className="toc">
-            <li>
-              <a href="#1">1. Difference between id and class in HTML/CSS</a>
-            </li>
-            <li>
-              <a href="#2">2. Box model in CSS</a>
-            </li>
-            <li>
-              <a href="#3">3. inline vs inline-block vs block element</a>
-            </li>
-            <li>
-              <a href="#4">4. SEO (Search Engine Optimization)</a>
-            </li>
-            <li>
-              <a href="#5">5. DOM (Document Object Model)</a>
-            </li>
-            <li>
-              <a href="#6">6. How to add an event listener to an element</a>
-            </li>
-            <li>
-              <a href="#7">
-                7. What is the difference between null and undefined?
-              </a>
-            </li>
-            <li>
-              <a href="#8">
-                8. What is the difference between cookies, sessionStorage, and
-                localStorage?
-              </a>
-            </li>
-            <li>
-              <a href="#9">9. How does the browser render a website?</a>
-            </li>
-          </ul>
-        </li>
-
-        <li>
-          <a href="#chapter2">
-            <span class="title">Another sub-heading</span>
-          </a>
-        </li>
-      </ul>
-
-      <h1 id="basic-level">List of questions at Basic Level</h1>
-
+    <>
       <h2 id="1">1. Difference between id and class in HTML/CSS</h2>
       <h3>Definition</h3>
       <p>
@@ -412,6 +361,7 @@ const FeInterview = () => {
         8. What is the difference between cookies, sessionStorage, and
         localStorage?
       </h2>
+      <h3>Definition</h3>
       <p>
         <b>Cookies</b> are <mark>small pieces of data</mark> stored in web
         browsers. They are mainly used for keeping information between HTTP
@@ -435,6 +385,13 @@ const FeInterview = () => {
         on localStorage are
         <mark> quite big</mark> compared to cookies, making it a much better
         alternative when storing large datasets.
+      </p>
+      <h3>Use cases</h3>
+      <p>
+        <b>Local Storage</b> for long-term data (e.g. Shopping Cart Items),{" "}
+        <b>Session Storage</b> for temporary tab/window-specific data (e.g.
+        Single-Session Form Data), and <b>Cookies</b> for server-side readable
+        data, authentication, and tracking (e.g. Authentication).
       </p>
       <img
         alt=""
@@ -479,33 +436,52 @@ const FeInterview = () => {
         src="https://cdn.prod.website-files.com/61ade8b25c29d61e883b12a4/657da9e83ad99312ed70cc37_image%20441.webp"
         alt=""
       ></img>
-      <img
-        src="https://hacks.mozilla.org/wp-content/uploads/2017/10/02-500x438.png"
-        alt=""
-        style={{ marginTop: "10px" }}
-      ></img>
+
       {/* ------------------------------------------------------ */}
 
-      <h1>References</h1>
-      <ul>
-        <li>
-          <a href="https://roadmap.sh/questions/frontend">
-            Top 30 Popular Front End Developer Interview Questions
-          </a>
-        </li>
-        <li>
-          <a href="https://www.semrush.com/blog/html-tags-for-seo/">
-            12 SEO HTML Tags You Need to Know
-          </a>
-        </li>
-        <li>
-          <a href="https://www.w3schools.com/whatis/whatis_htmldom.asp">
-            What is the HTML DOM?
-          </a>
-        </li>
-      </ul>
-    </div>
+      <h2 id="10">10. What are media queries?</h2>
+      <p>
+        Media queries are a feature in CSS that allow Front End developers to
+        apply different styles to a document based on various characteristics of
+        the device or viewport. For example, you can set different styles based
+        on the device's width, height, orientation, or type.
+      </p>
+      <p>
+        Through media queries we can achieve responsive design allowing styles
+        to adapt to different screen sizes and device capabilities.
+      </p>
+      <p>Syntax:</p>
+      <pre>
+        <code className="language-css">
+          @media media-type and (media-feature-rule) {"{\n"}
+          {"  "}/* CSS rules go here */
+          {"\n}"}
+        </code>
+      </pre>
+
+      <p>For example:</p>
+      <pre>
+        <code className="language-css">
+          @media screen and (width: 600px) {"{\n"}
+          {"  "}body {"{\n"}
+          {"     "}color: red;
+          {"\n  }\n"}
+          {"}"}
+        </code>
+      </pre>
+
+      <blockquote>
+        For more information, visit{" "}
+        <a href="https://developer.mozilla.org/en-US/docs/Learn/CSS/CSS_layout/Media_queries">
+          Beginner's guide to media queries
+        </a>{" "}
+        or{" "}
+        <a href="https://viblo.asia/p/tim-hieu-ve-media-query-3ZabG9oRzY6E">
+          Tìm hiểu về Media Query
+        </a>
+      </blockquote>
+    </>
   );
 };
 
-export default FeInterview;
+export default BasicLevel;
