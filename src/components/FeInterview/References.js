@@ -22,6 +22,11 @@ const References = () => {
             Basic concepts of flexbox
           </a>
         </li>
+        <li>
+          <a href="https://www.greatfrontend.com/questions/quiz/explain-event-delegation">
+            Explain event delegation in JavaScript
+          </a>
+        </li>
       </ul>
     </>
   );

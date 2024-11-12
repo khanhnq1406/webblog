@@ -68,6 +68,27 @@ const TableOfContent = () => {
                 15. What are closures, and how/why would you use them?
               </a>
             </li>
+            <li>
+              <a href="#16">
+                16. Can you explain what event delegation is in JavaScript?
+              </a>
+            </li>
+            <li>
+              <a href="#17">17. What are promises, and how do they work?</a>
+            </li>
+            <li>
+              <a href="#18">
+                18. How do you optimize website assets for better loading times?
+              </a>
+            </li>
+            <li>
+              <a href="#19">
+                19. What are service workers, and what are they used for?
+              </a>
+            </li>
+            <li href="#20">
+              20. What is the Same-Origin Policy in web development?
+            </li>
           </ul>
         </li>
       </ul>
