@@ -112,3 +112,42 @@ table.inline-block img {
   grid-column: 1 / 4; /* Spans across all columns in the third row */
   grid-row: 3;
 }
+
+/* Navigation */
+
+.navigation {
+  position: fixed;
+  left: 1vw;
+  overflow: scroll;
+  z-index: 999;
+}
+.navigation button {
+  border: none;
+  background-color: var(--white);
+}
+.navigation button:hover {
+  background-color: #f0f0f0;
+}
+.navigation img {
+  width: 5vw;
+  max-width: 40px;
+}
+
+.navigation .toc-navigation {
+  width: 100%;
+  background-color: #111317;
+  color: #f0f0f0;
+  padding: 1vw;
+  border-radius: 1vw;
+  overflow: scroll;
+  position: fixed;
+  z-index: 999;
+}
+
+.navigation .toc-navigation a {
+  color: #f0f0f0;
+  text-decoration: none;
+}
+.navigation .toc-navigation h1 {
+  margin-top: 0;
+}

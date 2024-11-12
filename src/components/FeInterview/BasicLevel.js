@@ -234,9 +234,11 @@ const BasicLevel = () => {
         <ul>
           <li>
             Finding HTML elements by id:
-            <code className="language-javascript">
-              const element = document.getElementById("myDiv");
-            </code>
+            <pre>
+              <code className="language-javascript">
+                const element = document.getElementById("myDiv");
+              </code>
+            </pre>
             <br />
             <code className="language-javascript">
               // Return: &lt;div id="myDiv"&gt;Hello&lt;/div&gt;
@@ -244,9 +246,11 @@ const BasicLevel = () => {
           </li>
           <li>
             Finding HTML elements by tag name:{" "}
-            <code className="language-javascript">
-              var x = document.getElementsByTagName("p");
-            </code>
+            <pre>
+              <code className="language-javascript">
+                var x = document.getElementsByTagName("p");
+              </code>
+            </pre>
             <br />
             <code className="language-javascript">
               {" "}
@@ -256,9 +260,11 @@ const BasicLevel = () => {
           </li>
           <li>
             Finding HTML elements by class name:
-            <code className="language-javascript">
-              var x = document.getElementsByClassName("intro");
-            </code>
+            <pre>
+              <code className="language-javascript">
+                var x = document.getElementsByClassName("intro");
+              </code>
+            </pre>
             <br />
             <code className="language-javascript">
               // Return: HTMLCollection [ &lt;div class="box"&gt;Box
@@ -267,9 +273,11 @@ const BasicLevel = () => {
           </li>
           <li>
             Finding HTML elements by CSS selectors:
-            <code className="language-javascript">
-              var x = document.querySelectorAll("p.intro");
-            </code>
+            <pre>
+              <code className="language-javascript">
+                var x = document.querySelectorAll("p.intro");
+              </code>
+            </pre>
             <br />
             <code className="language-javascript">
               {""}
@@ -329,12 +337,14 @@ const BasicLevel = () => {
       </p>
       <p>
         For example:
-        <code className="language-js">
-          document.querySelector('.className').addEventListener('click',
-          function (){"{"}
-          {" ... "}
-          {"})"}
-        </code>
+        <pre>
+          <code className="language-js">
+            document.querySelector('.className').addEventListener('click',
+            function (){"{"}
+            {" ... "}
+            {"})"}
+          </code>
+        </pre>
       </p>
 
       {/* ------------------------------------------------------ */}

@@ -5,12 +5,14 @@ import BasicLevel from "./BasicLevel";
 import References from "./References";
 import IntermediateLevel from "./IntermediateLevel";
 import AdvancedLevel from "./AdvancedLevel";
+import Navigation from "./Navigation";
 const FeInterview = () => {
   useEffect(() => {
     window.Prism.highlightAll();
   }, []);
   return (
     <div className="fe-interview">
+      <Navigation />
       <h1 style={{ marginTop: 0 }}>Frontend Interview</h1>
       <p>
         Reference from{" "}
