@@ -86,8 +86,70 @@ const TableOfContent = () => {
                 19. What are service workers, and what are they used for?
               </a>
             </li>
-            <li href="#20">
-              20. What is the Same-Origin Policy in web development?
+            <li>
+              <a href="#20">
+                20. What is the Same-Origin Policy in web development?
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li>
+          <a href="#intermediate-level">Advanced Level</a>
+          <ul className="toc">
+            <li>
+              <a href="#21">
+                21. What are CSS variables, and when would you use them?
+              </a>
+            </li>
+            <li>
+              <a href="#22">
+                22. How would you implement critical CSS to improve the
+                perceived load time of your web pages?
+              </a>
+            </li>
+            <li>
+              <a href="#23">23. How does the event loop work in JavaScript?</a>
+            </li>
+            <li>
+              <a href="#24">
+                24. What are the different ways to handle asynchronous
+                operations in JavaScript?
+              </a>
+            </li>
+            <li>
+              <a href="#25">
+                25. How do you handle state management in single-page
+                applications?
+              </a>
+            </li>
+            <li>
+              <a href="#26">
+                26. How does virtual DOM work, and what are its advantages?
+              </a>
+            </li>
+            <li>
+              <a href="#27">
+                27. What is server-side rendering, and when might you use it?
+              </a>
+            </li>
+            <li>
+              <a href="#28">
+                28. How do you analyze and improve the performance of a web
+                application?
+              </a>
+            </li>
+            <li>
+              <a href="#29">
+                29. What is Content Security Policy (CSP), and how does it
+                improve the security of web applications?
+              </a>
+            </li>
+            <li>
+              <a href="#30">
+                30. What is tree shaking, and how does it help with the
+                performance of a web application?
+              </a>
             </li>
           </ul>
         </li>

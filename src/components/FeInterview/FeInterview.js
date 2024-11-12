@@ -4,6 +4,7 @@ import "./FeInterview.css";
 import BasicLevel from "./BasicLevel";
 import References from "./References";
 import IntermediateLevel from "./IntermediateLevel";
+import AdvancedLevel from "./AdvancedLevel";
 const FeInterview = () => {
   useEffect(() => {
     window.Prism.highlightAll();
@@ -24,6 +25,9 @@ const FeInterview = () => {
 
       <h1 id="intermediate-level">Intermediate Level</h1>
       <IntermediateLevel />
+
+      <h1 id="advanced-level">Advanced Level</h1>
+      <AdvancedLevel />
 
       <h1>References</h1>
       <References />
