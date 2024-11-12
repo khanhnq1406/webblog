@@ -133,12 +133,11 @@ table.inline-block img {
 }
 
 .navigation .toc-navigation {
-  width: 100%;
+  width: fit-content;
   background-color: #111317;
   color: #f0f0f0;
   padding: 1vw;
   border-radius: 1vw;
-  overflow: scroll;
   position: fixed;
   z-index: 999;
 }
