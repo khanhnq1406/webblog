@@ -118,7 +118,6 @@ table.inline-block img {
 .navigation {
   position: fixed;
   left: 1vw;
-  overflow: scroll;
   z-index: 999;
 }
 .navigation button {

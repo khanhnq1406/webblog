@@ -153,6 +153,10 @@ const TableOfContent = () => {
             </li>
           </ul>
         </li>
+
+        <li>
+          <a href="#references">References</a>
+        </li>
       </ul>
     </>
   );
