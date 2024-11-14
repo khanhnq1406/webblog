@@ -15,6 +15,9 @@ const Home = () => {
           <Link to="/fe-interview">Front-end Interview</Link>
         </li>
         <li>
+          <Link to="/be-interview">Back-end Interview</Link>
+        </li>
+        <li>
           <Link to="/cheatsheet/css">CSS Cheat Sheet</Link>
         </li>
       </ul>
