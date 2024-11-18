@@ -512,6 +512,112 @@ const BasicLevel = () => {
           API versioning
         </a>
       </blockquote>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="9">9. How do you protect a server from SQL injection attacks?</h2>
+      <p>
+        There are many ways to protect your relational database from SQL
+        injection attacks, but here are three very common ones.
+        <ul>
+          <li>
+            <p style={{ marginLeft: 0 }}>
+              <b>Prepared statements with parameterized queries.</b> This is
+              probably the most effective way since it's done by a library or
+              framework, and all you have to do is write your queries leaving
+              placeholders for where the data is meant to go, and then, in a
+              separate place, provide the actual data.
+            </p>
+            <iframe
+              src="https://carbon.now.sh/embed?bg=rgba%28171%2C+184%2C+195%2C+1%29&t=seti&wt=none&l=javascript&width=680&ds=true&dsyoff=20px&dsblur=68px&wc=true&wa=true&pv=56px&ph=56px&ln=false&fl=1&fm=Hack&fs=14px&lh=133%25&si=false&es=2x&wm=false&code=%252F%252F%2520NOT%253A%2520Vulnerable%2520query%2520to%2520insert%2520a%2520user%250Aconst%2520sql%2520%253D%2520%2560INSERT%2520INTO%2520users%2520%28name%252C%2520age%29%2520VALUES%2520%28%27%2524%257Bname%257D%27%252C%2520%2524%257Bage%257D%29%2560%253B%250A%250A%252F%252F%2520SHOULD%253A%2520Insert%2520a%2520user%2520with%2520parameterized%2520query%250Aconst%2520sql%2520%253D%2520%27INSERT%2520INTO%2520users%2520%28name%252C%2520age%29%2520VALUES%2520%28%253F%252C%2520%253F%29%27%253B%2520%252F%252F%2520Use%2520placeholders%250Aconst%2520params%2520%253D%2520%255Bname%252C%2520age%255D%253B%2520%252F%252F%2520Parameter%2520values%250A%250Aconnection.execute%28sql%252C%2520params%252C%2520%28err%252C%2520results%29%2520%253D%253E%2520%257B%250A%2520%2520%2520%2520%252F%252F%2520Code...%250A%257D%29%253B%250A"
+              style={{
+                width: "100%",
+                height: "374px",
+                border: 0,
+                transform: "scale(1)",
+                overflow: "hidden",
+              }}
+              sandbox="allow-scripts allow-same-origin"
+            ></iframe>
+          </li>
+          <li>
+            <b>Use an ORM (Object-Relational Mapping).</b> These frameworks
+            allow you to abstract the interaction with your database and create
+            the SQL queries for you, taking into account all matters of security
+            around that interaction.
+            <img
+              src="https://images.viblo.asia/bb7407cb-2161-42be-a5cc-6df6c69dab3f.png"
+              alt=""
+            />
+          </li>
+          <li>
+            <b>Escaping data.</b> If you want to do this manually, you can take
+            care of escaping special characters that might break how you
+            construct your SQL queries. Keeping a list of blacklisted characters
+            to escape in this situation is a good idea, so you can
+            programmatically go through them.
+          </li>
+        </ul>
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="10">
+        10. Explain the concept of statelessness in HTTP and how it impacts
+        backend services
+      </h2>
+      <p>
+        HTTP is, by design, a stateless protocol, which means that every request
+        is unique and unrelated to any previous request, even from the same
+        client.
+      </p>
+      <p>
+        This affects backend web services by forcing them to implement their own
+        state management solutions if such a feature is required.
+      </p>
+      <blockquote>
+        For more details, visit{" "}
+        <a href="https://dev.to/codexam/why-is-http-stateless-2m3p">
+          Why is HTTP stateless?
+        </a>
+      </blockquote>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+      <h2 id="11">
+        11. What is containerization, and how does it benefit backend
+        development?
+      </h2>
+      <p>
+        It's a lightweight virtualization method to package applications and
+        their dependencies, ensuring consistent environments across different
+        systems.
+      </p>
+      <p>
+        It's actually a benefit for backend development because it provides
+        isolation and portability by simplifying deployment processes and
+        reducing conflicts between software versions and configurations.
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+      <h2 id="12">
+        12. What measures would you take to secure a newly developed API?
+      </h2>
+      <p>
+        There are many ways to secure an API, here are some of the most common
+        ones:
+        <ul>
+          <li>
+            Add an authentication method, such as OAuth, JWT, Bearer tokens,
+            Session-based auth, and others.
+          </li>
+          <li>Use HTTPS to encrypt data transfer between client and server.</li>
+          <li>Configure strong CORS policies to avoid unwanted requests.</li>
+          <li>
+            Setup a strong authorization logic, to ensure clients only access
+            resources they have access to.
+          </li>
+        </ul>
+      </p>
     </>
   );
 };

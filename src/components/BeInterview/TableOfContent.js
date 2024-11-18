@@ -45,6 +45,29 @@ const TableOfContent = () => {
                 8. How do you approach API versioning in your projects?
               </a>
             </li>
+            <li>
+              <a href="#9">
+                9. How do you protect a server from SQL injection attacks?
+              </a>
+            </li>
+            <li>
+              <a href="#10">
+                10. Explain the concept of statelessness in HTTP and how it
+                impacts backend services
+              </a>
+            </li>
+            <li>
+              <a href="#11">
+                11. What is containerization, and how does it benefit backend
+                development?
+              </a>
+            </li>
+            <li>
+              <a href="#12">
+                12. What measures would you take to secure a newly developed
+                API?
+              </a>
+            </li>
           </ul>
         </li>
 
