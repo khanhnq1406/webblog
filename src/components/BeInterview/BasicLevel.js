@@ -382,6 +382,136 @@ const BasicLevel = () => {
           </li>
         </ul>
       </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="6">
+        6. What kind of tests would you write for a new API endpoint?
+      </h2>
+      <p>
+        As backend developers, we have to think about the types of tests that
+        there are out there.
+        <ul>
+          <li>
+            <b>Unit tests:</b> Always remember to only test the relevant logic
+            through the public interface of your code (avoid testing private
+            methods or inaccessible functions inside your modules). Focus on the
+            business logic and don't try to test the code that uses external
+            services (like a database, the disk or anything outside of the piece
+            of code you're testing).
+          </li>
+          <li>
+            <b>Integration tests:</b> Test the full endpoint through its public
+            interface (the actual HTTP endpoint) and see how it integrates with
+            the external services it's using (i.e the database, another API,
+            etc).
+          </li>
+          <li>
+            <b>Load testing / performance testing:</b> You might want to also
+            check how the new endpoint behaves under heavy stress. This might
+            not be required depending on the API you're using, but as a rule of
+            thumb, it's a good one to perform at the end of the development
+            phase before releasing the new endpoint into prod.
+          </li>
+        </ul>
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="7">
+        7. Describe how session management works in web applications
+      </h2>
+      <p>
+        The following is a high-level overview of how session management works
+        for web applications:
+        <ul>
+          <li>
+            <b>The session is created.</b> This happens with the first
+            interaction with the system by the user (during log-in). The backend
+            of your app will create a unique session ID that will be stored and
+            returned to the user to use in future requests.
+          </li>
+          <li>
+            <b>Session information storage.</b> The session data needs to be
+            stored somewhere. Whether it's in-memory, or inside a database, it
+            needs to be indexed by the session ID from the previous point. Here
+            the best option is to use a database (ideally something like Redis
+            with high I/O performance) so that the services can be scaled
+            independently from the session data.
+          </li>
+          <li>
+            <b>The session ID is sent to the client.</b> The most common way of
+            doing this is through cookies. The backend can set up a cookie with
+            the session ID and the frontend can read it securely and use that ID
+            however it needs to.
+          </li>
+          <li>
+            <b>Client sends the session ID.</b> After the ID is created, the
+            client application will identify itself with the backend using this
+            ID on every request.
+          </li>
+          <li>
+            <b>Accessing the session data in the backend.</b> The backend will
+            access the stored session data using the session ID received from
+            the client.
+          </li>
+          <li>
+            <b>Session is closed.</b> After a while, or perhaps through a user
+            action, the session ID will be deleted, which will cause the session
+            data to be lost (or removed from the DB). This effectively ends the
+            interactions between the client and the server as part of the
+            existing session.
+          </li>
+        </ul>
+      </p>
+      <img
+        alt=""
+        src="https://hazelcast.com/wp-content/uploads/2021/12/diagram-Web-Sessions.png"
+      />
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="8">8. How do you approach API versioning in your projects?</h2>
+      <h3>Definition</h3>
+      <p>
+        API versioning is the process of managing and tracking changes to an
+        API. It also involves communicating those changes to the API's
+        consumers.
+      </p>
+      <p>
+        Change is a natural part of API development. Sometimes, developers have
+        to update their API's code to fix security vulnerabilities, while other
+        changes introduce new features or functionality. Some changes do not
+        affect consumers at all, while others, which are known as “breaking
+        changes,” lead to backward-compatibility issues, such as unexpected
+        errors and data corruption. API versioning ensures that these changes
+        are rolled out successfully in order to preserve consumer trust while
+        keeping the API secure, bug-free, and highly performant.
+      </p>
+      <h3>Some types of API versioning</h3>
+      <p>
+        There are several ways in which you can handle API versioning, but the
+        most common ones are:
+        <ul>
+          <li>
+            <b>Keeping the version in the URL:</b> Either as a URL attribute
+            (i.e /your-api/users?v=1) or as part of the URL (i.e
+            /v1/your-api/users). In both situations the version is clearly
+            visible to the developer using the API.
+          </li>
+          <li>
+            <b>Using a custom header:</b> Another option is to have a custom
+            header (such as api-version) where the developer must specify the
+            version of your API they intend to use.
+          </li>
+        </ul>
+      </p>
+      <blockquote>
+        For more details, visit{" "}
+        <a href="https://www.postman.com/api-platform/api-versioning/">
+          API versioning
+        </a>
+      </blockquote>
     </>
   );
 };

@@ -30,6 +30,21 @@ const TableOfContent = () => {
                 5. How would you handle file uploads in a web application?
               </a>
             </li>
+            <li>
+              <a href="#6">
+                6. What kind of tests would you write for a new API endpoint?
+              </a>
+            </li>
+            <li>
+              <a href="#7">
+                7. Describe how session management works in web applications
+              </a>
+            </li>
+            <li>
+              <a href="#8">
+                8. How do you approach API versioning in your projects?
+              </a>
+            </li>
           </ul>
         </li>
 
