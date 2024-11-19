@@ -44,7 +44,6 @@ const BasicLevel = () => {
         NoSQL databases are primarily called non-relational or distributed
         databases.{" "}
       </p>
-
       <h4>Language</h4>
       <p>
         <mark>
@@ -74,7 +73,6 @@ const BasicLevel = () => {
         structure. The syntax varies from database to database, and you can add
         fields as you go.{" "}
       </p>
-
       <h4>Scalability</h4>
       <p>
         In almost all situations{" "}
@@ -94,7 +92,6 @@ const BasicLevel = () => {
         larger and more powerful, making these databases the preferred choice
         for large or ever-changing data sets.
       </p>
-
       <h4>Structure</h4>
       <p>
         <mark>SQL databases are table-based</mark> on the other hand{" "}
@@ -106,20 +103,17 @@ const BasicLevel = () => {
         that require multi-row transactions such as an accounting system or for
         legacy systems that were built for a relational structure.{" "}
       </p>
-
       <h4>Property followed</h4>
       <p>
         SQL databases follow ACID properties (Atomicity, Consistency, Isolation,
         and Durability) whereas the NoSQL database follows the Brewers CAP
         theorem (Consistency, Availability, and Partition tolerance).{" "}
       </p>
-
       <h3>When To Use: SQL vs NoSQL</h3>
       <p>
         While NoSQL is good when the availability of big data is more crucial,
         SQL is valued for ensuring data validity.{" "}
       </p>
-
       <h3>Key Highlights on SQL vs NoSQL</h3>
       <div style={{ display: "flex", justifyContent: "center" }}>
         <table className="inline-block">
@@ -583,6 +577,7 @@ const BasicLevel = () => {
       </blockquote>
 
       {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
       <h2 id="11">
         11. What is containerization, and how does it benefit backend
         development?
@@ -599,6 +594,7 @@ const BasicLevel = () => {
       </p>
 
       {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
       <h2 id="12">
         12. What measures would you take to secure a newly developed API?
       </h2>
@@ -616,6 +612,202 @@ const BasicLevel = () => {
             Setup a strong authorization logic, to ensure clients only access
             resources they have access to.
           </li>
+        </ul>
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="13">
+        13. How would you scale a backend application during a traffic surge?
+      </h2>
+      <p>
+        The most common way to scale up a backend application during traffic
+        surges is to have multiple instances of the application behind a load
+        balancer, and when the traffic surge happens,{" "}
+        <mark>simply add more instances of the application.</mark>
+      </p>
+      <p>
+        This is known as horizontal scaling and works best when the backend
+        application is stateless.
+      </p>
+      <img
+        src="https://assets.roadmap.sh/guest/scale-backend-amf0h.png"
+        alt=""
+      />
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="14">14. What is Load Balancing?</h2>
+      <p style={{ marginLeft: "1vw" }}>
+        Reference:{" "}
+        <a href="https://aws.amazon.com/what-is/load-balancing/">
+          What is Load Balancing?
+        </a>
+      </p>
+      <h3>Definition</h3>
+      <p>
+        Load balancing is the method of distributing network traffic equally
+        across a pool of resources that support an application.
+      </p>
+      <p>
+        A load balancer is a device that sits between the user and the server
+        group and acts as an invisible facilitator, ensuring that all resource
+        servers are used equally.
+      </p>
+      <h3>What are load balancing algorithms?</h3>
+      <p style={{ marginLeft: "2vw" }}>
+        Reference:{" "}
+        <a href="https://www.geeksforgeeks.org/load-balancing-algorithms/#1-static-load-balancing-algorithms">
+          Load Balancing Algorithms
+        </a>
+      </p>
+      <p>
+        A load balancing algorithm is the set of rules that a load balancer
+        follows to determine the best server for each of the different client
+        requests. Load balancing algorithms fall into two main categories.
+        <ul>
+          <li>
+            <b>Static load balancing algorithms</b> follow fixed rules and are
+            independent of the current server state. The following are examples
+            of static load balancing.
+            <ul>
+              <li>
+                <b>Round Robin. </b> The Round Robin algorithm is a simple
+                static load balancing approach in which requests are distributed
+                across the servers in a sequential or rotational manner. It is
+                easy to implement but it doesn't consider the load already on a
+                server so there is a risk that one of the servers receives a lot
+                of requests and becomes overloaded.
+                <img
+                  src="https://media.geeksforgeeks.org/wp-content/uploads/20240130183312/Round-Robin-(1).webp"
+                  alt=""
+                ></img>
+              </li>
+              <li>
+                <b>Weighted Round Robin.</b> The Weighted Round Robin algorithm
+                is also a static load balancing approach which is much similar
+                to the round-robin technique. The only difference is, that each
+                of the resources in a list is provided a weighted score.
+                Depending on the weighted score the request is distributed to
+                these servers.{" "}
+                <img
+                  src="https://media.geeksforgeeks.org/wp-content/uploads/20240130183429/Weighted-Round-Robin-(1).webp"
+                  alt=""
+                ></img>
+              </li>
+              <li>
+                <b>Source IP Hash. </b>The Source IP Hash Load Balancing
+                Algorithm is a method used in network load balancing to
+                distribute incoming requests among a set of servers based on the
+                hash value of the source IP address. This algorithm aims to
+                ensure that requests originating from the same source IP address
+                are consistently directed to the same server.
+              </li>
+            </ul>
+          </li>
+
+          <li>
+            <b>Dynamic Load Balancing Algorithms. </b>Dynamic load balancing
+            involves making real-time decisions about how to distribute incoming
+            network traffic or computational workload across multiple servers or
+            resources. This approach adapts to the changing conditions of the
+            system, such as variations in server load, network traffic, or
+            resource availability.
+            <ul>
+              <li>
+                <b>Least Connection Method. </b>The Least Connections algorithm
+                is a dynamic load balancing approach that assigns new requests
+                to the server with the fewest active connections. The idea is to
+                distribute incoming workloads in a way that minimizes the
+                current load on each server, aiming for a balanced distribution
+                of connections across all available resources.
+                <img
+                  alt=""
+                  src="https://media.geeksforgeeks.org/wp-content/uploads/20240130183529/Least-Connection-(1).webp"
+                />
+              </li>
+              <li>
+                <b>Weighted response time.</b> Averages the response time of
+                each server, and combines that with the number of connections
+                each server has open to determine where to send traffic. By
+                sending traffic to the servers with the quickest response time,
+                the algorithm ensures faster service for users.
+                <img
+                  src="https://media.geeksforgeeks.org/wp-content/uploads/20240130183553/Least-Response-(2).webp"
+                  alt=""
+                />
+              </li>
+              <li>
+                <b>Resource-based. </b>Distributes load based on what resources
+                each server has available at the time. Specialized software
+                (called an "agent") running on each server measures that
+                server's available CPU and memory, and the load balancer queries
+                the agent before distributing traffic to that server.
+                <img
+                  src="https://media.geeksforgeeks.org/wp-content/uploads/20241111132131504562/resource-based-load-balancing-algorithm.webp"
+                  alt=""
+                ></img>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </p>
+
+      <h3>What are the types of load balancing?</h3>
+      <p>
+        We can classify load balancing into three main categories depending on
+        what the load balancer checks in the client request to redirect the
+        traffic.
+        <ul>
+          <li>Application load balancing</li>
+          <li>Network load balancing</li>
+          <li>Global server load balancing</li>
+          <li>DNS load balancing</li>
+        </ul>
+      </p>
+
+      <h3>What are the types of load balancing technology?</h3>
+      <p>
+        Load balancers are one of two types: hardware load balancer and software
+        load balancer.
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="15">
+        15. What tools and techniques do you use for debugging a backend
+        application?
+      </h2>
+
+      <p>
+        If the backend application being debugged is in the local dev machine, a
+        simple solution would be to use the IDE itself. Most modern IDEs, such
+        as IntelliJ, Eclipse and others have integrated debugging capabilities.
+      </p>
+      <p>
+        If the backend application is on the server though, you’ll have to use
+        other techniques, such as logging, which you can do with logging
+        libraries. Or, you can use more complex tools such as JProfiler or
+        NewRelic.
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="16">
+        16. How do you ensure your backend code is maintainable and easy to
+        understand?
+      </h2>
+      <p>
+        The trick here is to follow best practices and coding standards such as:
+        <ul>
+          <li>Modularity.</li>
+          <li>Following naming conventions.</li>
+          <li>Adding code comments.</li>
+          <li>Doing regular refactors to keep technical debt under check.</li>
+          <li>
+            Keeping error handling messages consistent throughout the platform.
+          </li>
+          <li>Performing unit tests on all written code.</li>
         </ul>
       </p>
     </>

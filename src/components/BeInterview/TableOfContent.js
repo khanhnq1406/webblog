@@ -68,6 +68,27 @@ const TableOfContent = () => {
                 API?
               </a>
             </li>
+            <li>
+              <a href="#13">
+                13. How would you scale a backend application during a traffic
+                surge?
+              </a>
+            </li>
+            <li>
+              <a href="#14">14. What is Load Balancing?</a>
+            </li>
+            <li>
+              <a href="#15">
+                15. What tools and techniques do you use for debugging a backend
+                application?
+              </a>
+            </li>
+            <li>
+              <a href="#16">
+                16. How do you ensure your backend code is maintainable and easy
+                to understand?
+              </a>
+            </li>
           </ul>
         </li>
 
