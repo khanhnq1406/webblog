@@ -217,6 +217,134 @@ const IntermediateLevel = () => {
           here
         </a>
       </blockquote>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="24">
+        24. How do you handle data encryption and decryption in a
+        privacy-focused application?
+      </h2>
+      <p>
+        For this type of application, you have to distinguish between{" "}
+        <mark>"data at rest" and "data in transit".</mark> The first one
+        describes your data while <mark>it's stored</mark> in your database (or
+        any data storage you have). And the latter (data in transit) describes
+        your data while <mark>it's traveling</mark> between backend services or
+        even between the server and the client.
+      </p>
+      <p>
+        For <b>"data in transit",</b> you should be ensuring that connection
+        happens inside a secure and encrypted channel such as HTTPS.
+      </p>
+      <p>
+        And for <b>"data at rest"</b> use strong encryption algorithms such as
+        AES, RSA or ECC and make sure to keep their associated keys somewhere
+        safe, such as inside a dedicated secrets management tool or key
+        management services (KMS).
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="25">
+        25. What are webhooks and how have you implemented them in past
+        projects?
+      </h2>
+      <p>
+        Webhooks are user-defined HTTP callbacks, they are triggered by a
+        specific event inside a system. They're mainly used to notify about
+        result of multi-step, asynchronous tasks to avoid keeping an open HTTP
+        connection.
+      </p>
+      <p>
+        As for the implementation of a webhook, consider the following:
+        <ul>
+          <li>
+            <b>Event definition.</b> Make sure to define exactly what events
+            will trigger the message to the webhook and the type of payload
+            associated with those events.
+          </li>
+          <li>
+            <b>Endpoint creation.</b> Based on the previous step, define an HTTP
+            endpoint that can deal with the expected request (especially with
+            the payload part). In other words, if you're receiving data in the
+            webhook request, make sure to create the endpoint as a POST
+            endpoint, otherwise you can use a GET one.
+          </li>
+          <li>
+            <b>Security.</b> Remember to implement some form of security
+            measures around your webhook endpoint so it can't be exploited.
+          </li>
+        </ul>
+      </p>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <iframe
+          width="560"
+          height="315"
+          src="https://www.youtube.com/embed/-2AIemn3oCU?si=XAc0WvwD03KTsOkl"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowFullScreen="true"
+        ></iframe>
+      </div>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="26">
+        26. What considerations must be taken into account for GDPR compliance
+        in a backend system?
+      </h2>
+      <p>
+        The following are key considerations to be taken into account:
+        <ul>
+          <li>
+            <b>
+              Capture only what you need and what you told your users you'd
+              capture.
+            </b>{" "}
+            Remember that to comply with GDPR (General Data Protection
+            Regulation), you have to ask for your user's consent to collect
+            their data, and you have to specify the actual data points you're
+            collecting. So focus on those and nothing else.
+          </li>
+          <li>
+            <b>Secure your data.</b> As part of the regulations, you have to
+            make sure your data is secured both in transit and at rest. There
+            are regular security audits that have to happen to ensure security
+            is kept high.
+          </li>
+          <li>
+            <b>The user has rights over the data you've captured,</b> so make
+            sure you give them the right endpoints or services to read it, edit
+            it or even remove it if they want.
+          </li>
+        </ul>
+      </p>
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="27">
+        27. Explain how you would deal with long-running processes in web
+        requests
+      </h2>
+      <p>
+        For web requests that trigger long-running processes, the best option is
+        to implement a reactive architecture. This means that when a service
+        receives a request, it will transform it into a message inside a message
+        queue, and the long-running process will pick it up whenever it's ready
+        to do so.
+      </p>
+      <p>
+        In the meantime, the client sending this request receives an immediate
+        response acknowledging that the request is being processed. The client
+        itself can also be connected to the message queue (or through a proxy)
+        and waiting for a "ready" event with its payload inside.
+      </p>
+      <img
+        src="https://assets.roadmap.sh/guest/long-running-sn5fc.png"
+        alt=""
+      />
     </>
   );
 };

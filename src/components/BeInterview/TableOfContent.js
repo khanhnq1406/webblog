@@ -137,6 +137,30 @@ const TableOfContent = () => {
                 your applications?
               </a>
             </li>
+            <li>
+              <a href="#24">
+                24. How do you handle data encryption and decryption in a
+                privacy-focused application?
+              </a>
+            </li>
+            <li>
+              <a href="#25">
+                25. What are webhooks and how have you implemented them in past
+                projects?
+              </a>
+            </li>
+            <li>
+              <a href="#26">
+                26. What considerations must be taken into account for GDPR
+                compliance in a backend system?
+              </a>
+            </li>
+            <li>
+              <a href="#27">
+                27. Explain how you would deal with long-running processes in
+                web requests
+              </a>
+            </li>
           </ul>
         </li>
 
