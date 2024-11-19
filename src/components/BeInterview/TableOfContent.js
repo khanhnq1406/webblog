@@ -94,7 +94,50 @@ const TableOfContent = () => {
 
         <li>
           <a href="#intermediate-level">Intermediate Level</a>
-          <ul className="toc"></ul>
+          <ul className="toc">
+            <li>
+              <a href="#17">
+                17. Describe how you would implement a full-text search in a
+                database
+              </a>
+            </li>
+            <li>
+              <a href="#18">
+                18. How would you approach batch processing in a data-heavy
+                backend application?
+              </a>
+            </li>
+            <li>
+              <a href="#19">
+                19. Can you explain the use and benefits of a message queue in a
+                distributed system?
+              </a>
+            </li>
+            <li>
+              <a href="#20">
+                20. What strategies would you use to manage database connections
+                in a high-load scenario?
+              </a>
+            </li>
+            <li>
+              <a href="#21">
+                21. How would you set up a continuous integration/continuous
+                deployment (CI/CD) pipeline for backend services?
+              </a>
+            </li>
+            <li>
+              <a href="#22">
+                22. Can you describe a distributed caching strategy for a
+                high-availability application?
+              </a>
+            </li>
+            <li>
+              <a href="#23">
+                23. What methods can you use for managing background tasks in
+                your applications?
+              </a>
+            </li>
+          </ul>
         </li>
 
         <li>
