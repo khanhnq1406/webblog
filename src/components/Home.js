@@ -20,6 +20,9 @@ const Home = () => {
         <li>
           <Link to="/cheatsheet/css">CSS Cheat Sheet</Link>
         </li>
+        <li>
+          <Link to="/mysql">MySQL Basics</Link>
+        </li>
       </ul>
     </div>
   );

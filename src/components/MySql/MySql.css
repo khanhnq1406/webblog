@@ -1,0 +1,43 @@
+.mysql * {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.mysql {
+  background-color: var(--white);
+  padding: 1vw 15vw;
+}
+
+.mysql h1 {
+  text-align: left;
+}
+
+.mysql h2 {
+  margin-left: 1vw;
+}
+
+.mysql h3 {
+  margin-left: 2vw;
+}
+
+.mysql h4 {
+  margin-left: 3vw;
+}
+
+.mysql p {
+  font-weight: normal;
+  margin-left: 3vw;
+}
+
+.mysql img {
+  max-width: 700px;
+  width: 100%;
+  display: block;
+  margin: auto;
+}
+
+.mysql blockquote {
+  background-color: #ededed;
+  width: fit-content;
+  padding: 10px;
+  border-radius: 10px;
+}
