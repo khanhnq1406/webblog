@@ -1,5 +1,6 @@
 import "./MySql.css";
 import MySqlBasics from "./MySqlBasics";
+import References from "./References";
 const MySql = () => {
   return (
     <div className="mysql">
@@ -7,6 +8,9 @@ const MySql = () => {
 
       <h1>My SQL Basics</h1>
       <MySqlBasics />
+
+      <h1>References</h1>
+      <References />
     </div>
   );
 };
