@@ -161,6 +161,18 @@ const TableOfContent = () => {
                 web requests
               </a>
             </li>
+            <li>
+              <a href="#28">
+                28. Discuss the implementation of rate limiting to protect APIs
+                from abuse
+              </a>
+            </li>
+            <li>
+              <a href="#28">
+                28. Discuss the implementation of rate limiting to protect APIs
+                from abuse
+              </a>
+            </li>
           </ul>
         </li>
 

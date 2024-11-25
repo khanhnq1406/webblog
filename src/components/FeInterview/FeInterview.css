@@ -139,7 +139,13 @@ table.inline-block img {
   padding: 1vw;
   border-radius: 1vw;
   position: fixed;
+  bottom: 0;
+  top: 0;
+  left: 5vw;
   z-index: 999;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  height: 100vh;
 }
 
 .navigation .toc-navigation a {
@@ -148,4 +154,25 @@ table.inline-block img {
 }
 .navigation .toc-navigation h1 {
   margin-top: 0;
+}
+
+/* width */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 2px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

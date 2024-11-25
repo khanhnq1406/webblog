@@ -345,6 +345,13 @@ const IntermediateLevel = () => {
         src="https://assets.roadmap.sh/guest/long-running-sn5fc.png"
         alt=""
       />
+
+      {/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */}
+
+      <h2 id="28">
+        28. Discuss the implementation of rate limiting to protect APIs from
+        abuse
+      </h2>
     </>
   );
 };
