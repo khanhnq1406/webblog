@@ -1,5 +1,6 @@
 import "./MySql.css";
 import MySqlBasics from "./MySqlBasics";
+import Operators from "./Operators";
 import References from "./References";
 const MySql = () => {
   return (
@@ -8,6 +9,8 @@ const MySql = () => {
 
       <h1>My SQL Basics</h1>
       <MySqlBasics />
+      <h1>Operators in MySQL</h1>
+      <Operators />
 
       <h1>References</h1>
       <References />
