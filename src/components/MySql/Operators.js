@@ -190,6 +190,46 @@ const Operators = () => {
         }}
         sandbox="allow-scripts allow-same-origin"
       ></iframe>
+
+      <h2>Filter records in MySQL</h2>
+      <p>WHERE clause is used to filter the record from the data</p>
+
+      <h2>Pattern matching in MySQL</h2>
+      <h3>LIKE</h3>
+      <p>
+        LIKE Operators are used with WHERE clause to find the pattern from the
+        database
+      </p>
+      <p>Example</p>
+      <iframe
+        src="https://carbon.now.sh/embed?bg=rgba%28171%2C+184%2C+195%2C+1%29&t=seti&wt=none&l=auto&width=680&ds=true&dsyoff=20px&dsblur=68px&wc=true&wa=true&pv=0px&ph=0px&ln=false&fl=1&fm=Hack&fs=14px&lh=133%25&si=false&es=2x&wm=false&code=SELECT%2520*%2520FROM%2520student_table%250AWHERE%2520email%2520LIKE%2520%27%2525k%2525%27%253B%250A%250ASELECT%2520*%2520FROM%2520student_table%250AWHERE%2520student_name%2520LIKE%2520%27%2525nguyen%2525%27%253B"
+        style={{
+          width: "100%",
+          height: "167px",
+          border: 0,
+          transform: "scale(1)",
+          overflow: "hidden",
+        }}
+        sandbox="allow-scripts allow-same-origin"
+      ></iframe>
+
+      <h2>Null values in MySQL</h2>
+      <p>
+        When you have a filed with null value then they will be a option for you
+        to insert new record or update record without adding a value
+      </p>
+      <p>Example</p>
+      <iframe
+        src="https://carbon.now.sh/embed?bg=rgba%28171%2C+184%2C+195%2C+1%29&t=seti&wt=none&l=text%2Fx-mysql&width=680&ds=true&dsyoff=20px&dsblur=68px&wc=true&wa=true&pv=0px&ph=0px&ln=false&fl=1&fm=Hack&fs=14px&lh=133%25&si=false&es=2x&wm=false&code=SELECT%2520*%2520FROM%2520student_table%250AWHERE%2520email%2520is%2520null%253B"
+        style={{
+          width: "100%",
+          height: "110px",
+          border: 0,
+          transform: "scale(1)",
+          overflow: "hidden",
+        }}
+        sandbox="allow-scripts allow-same-origin"
+      ></iframe>
     </>
   );
 };

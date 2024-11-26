@@ -17,3 +17,12 @@ WHERE course_name IN ("c1002", "c1005");
 
 SELECT * FROM student_table
 WHERE student_id BETWEEN 1 AND 2;
+
+SELECT * FROM student_table
+WHERE email LIKE '%k%';
+
+SELECT * FROM student_table
+WHERE student_name LIKE '%nguyen%';
+
+SELECT * FROM student_table
+WHERE email is null;
