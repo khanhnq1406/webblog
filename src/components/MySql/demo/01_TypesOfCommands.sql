@@ -14,6 +14,8 @@ CREATE TABLE student_table(
 
 DESCRIBE student_table;
 
+SHOW tables;
+
 ALTER TABLE student_table ADD email VARCHAR(100);
 
 TRUNCATE TABLE student_table;
