@@ -61,6 +61,6 @@
 -- INNER JOIN account
 -- ON customer.custid = account.custid;
 
-SELECT * FROM customer
-LEFT JOIN account
-ON customer.custid = account.custid;
+-- SELECT * FROM customer
+-- LEFT JOIN account
+-- ON customer.custid = account.custid;
