@@ -136,6 +136,21 @@ const CheatSheet = () => {
         }}
         sandbox="allow-scripts allow-same-origin"
       ></iframe>
+      <h2>HAVING clause</h2>
+      <p>
+        The HAVING clause was added to SQL because the WHERE keyword cannot be
+        used with aggregate functions.
+      </p>
+      <pre>
+        <code className="language-sql">
+          SELECT column_name(s){"\n"}
+          FROM table_name{"\n"}
+          WHERE condition{"\n"}
+          GROUP BY column_name(s){"\n"}
+          HAVING condition{"\n"}
+          ORDER BY column_name(s);
+        </code>
+      </pre>
     </>
   );
 };
