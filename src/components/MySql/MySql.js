@@ -1,4 +1,5 @@
 import AdvancedSql from "./AdvancedSql";
+import CheatSheet from "./CheatSheet";
 import Join from "./Join";
 import "./MySql.css";
 import MySqlBasics from "./MySqlBasics";
@@ -17,6 +18,8 @@ const MySql = () => {
       <Join />
       <h1>Advanced SQL</h1>
       <AdvancedSql />
+      <h1>MySQL Cheat Sheet</h1>
+      <CheatSheet />
       <h1>References</h1>
       <References />
     </div>
