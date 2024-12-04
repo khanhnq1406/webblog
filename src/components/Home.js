@@ -23,6 +23,9 @@ const Home = () => {
         <li>
           <Link to="/mysql">MySQL Basics</Link>
         </li>
+        <li>
+          <Link to="/typescript">TypeScript</Link>
+        </li>
       </ul>
     </div>
   );

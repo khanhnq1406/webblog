@@ -58,3 +58,44 @@ h1 {
   --pastel-green: #77dd77;
   --pastel-red: #ff6961;
 }
+
+* {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  background-color: var(--white);
+  padding: 0vw 1vw;
+}
+
+h1 {
+  text-align: left;
+}
+
+h2 {
+  margin-left: 1vw;
+}
+
+h3 {
+  margin-left: 2vw;
+}
+
+h4 {
+  margin-left: 3vw;
+}
+
+p {
+  font-weight: normal;
+  margin-left: 3vw;
+}
+
+img {
+  max-width: 700px;
+  width: 100%;
+  display: block;
+  margin: auto;
+}
+
+blockquote {
+  background-color: #ededed;
+  width: fit-content;
+  padding: 10px;
+  border-radius: 10px;
+}

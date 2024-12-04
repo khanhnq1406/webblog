@@ -6,6 +6,7 @@ import Home from "./components/Home";
 import CssCheatSheet from "./components/CssCheatSheet";
 import BeInterview from "./components/BeInterview/BeInterview";
 import MySql from "./components/MySql/MySql";
+import TypeScript from "./components/TypeScript";
 function App() {
   return (
     <Router>
@@ -16,6 +17,7 @@ function App() {
         <Route path="/be-interview" element={<BeInterview />} />
         <Route path="/cheatsheet/css" element={<CssCheatSheet />} />
         <Route path="/mysql" element={<MySql />} />
+        <Route path="/typescript" element={<TypeScript />} />
       </Routes>
     </Router>
   );
