@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+h1 {
+  font-size: xx-large;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: x-large;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: larger;
+  font-weight: 700;
+}
+
+h4 {
+  font-size: large;
+  font-weight: 700;
+}
+
+b {
+  padding: 0;
+}
+img {
+  max-width: 700px;
+}

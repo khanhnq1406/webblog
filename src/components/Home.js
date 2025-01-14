@@ -26,6 +26,9 @@ const Home = () => {
         <li>
           <Link to="/typescript">TypeScript</Link>
         </li>
+        <li>
+          <Link to="/react">React Roadmap</Link>
+        </li>
       </ul>
     </div>
   );

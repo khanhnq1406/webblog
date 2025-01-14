@@ -7,6 +7,7 @@ import CssCheatSheet from "./components/CssCheatSheet";
 import BeInterview from "./components/BeInterview/BeInterview";
 import MySql from "./components/MySql/MySql";
 import TypeScript from "./components/TypeScript";
+import { ReactRoadMap } from "./components/ReactRoadMap/ReactRoadMap";
 function App() {
   return (
     <Router>
@@ -18,6 +19,7 @@ function App() {
         <Route path="/cheatsheet/css" element={<CssCheatSheet />} />
         <Route path="/mysql" element={<MySql />} />
         <Route path="/typescript" element={<TypeScript />} />
+        <Route path="/react" element={<ReactRoadMap />} />
       </Routes>
     </Router>
   );
