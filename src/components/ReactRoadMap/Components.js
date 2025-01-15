@@ -100,6 +100,73 @@ export const Components = () => {
         src="https://miro.medium.com/v2/resize:fit:1400/1*IxsmOhlqRgxrxEeDP6yU9w.png"
         alt=""
       />
+      <h2>Conditional Rendering</h2>
+      <div>
+        Your component will often need to display different things depending on
+        different conditions. In React, you can conditionally render JSX using
+        JavaScript syntax like if statements, &&, and ?: operators.
+      </div>
+      <div>
+        You can return a JSX expression conditionally with an if statement.
+      </div>
+      <div>
+        In JSX, {"{cond ? <A /> : <B />}"} means “if cond, render {"<A />"},
+        otherwise {"<B />"}
+        ”.
+      </div>
+      <div>
+        In JSX,{" {cond && <A />}"} means “if cond, render {"<A />"}, otherwise
+        nothing”.
+      </div>
+      <h2>Composition vs Inheritance</h2>
+      <h3>Definition</h3>
+      <div>
+        Component composition in React involves combining smaller, independent
+        components to create complex UIs. Each sub-component can contain further
+        components, enhancing code readability. This process breaks down the UI
+        into manageable pieces, aiding traceability, scalability, and
+        maintenance. Component composition facilitates easier debugging and
+        isolated changes, making web development more efficient and
+        maintainable.
+      </div>
+      <div>
+        You have seen how component composition is mainly used for reusable
+        React components that require a well-designed API. Often you will find
+        this kind of component composition just to layout your application as
+        well.
+      </div>
+      <h3>How can composition help performance?</h3>
+      <ul className="list-disc">
+        <li>
+          <b>Code Reusability:</b> Composition allows you to create small,
+          focused, and reusable components or modules. By reusing existing code
+          in various parts of your application, you reduce redundancy and
+          maintain a more efficient codebase.
+        </li>
+        <li>
+          <b>Modularity:</b> Composing applications from smaller, independent
+          modules makes it easier to understand, test, and maintain code. This
+          modularity can result in faster development cycles and quicker
+          debugging processes.
+        </li>
+        <li>
+          <b>Optimized Code Loading:</b> In scenarios like lazy loading{" "}
+          <i>
+            (Instead of loading an entire webpage all at once, lazy loading
+            loads only the parts that are immediately necessary.)
+          </i>{" "}
+          or dynamic imports, composition allows loading only the components
+          needed for a particular feature. This can significantly reduce initial
+          page load times, improving the overall performance of your
+          application.
+        </li>
+        <li>
+          <b>Parallel Development:</b> When different teams or developers work
+          on independent components, they can progress simultaneously without
+          interfering with each other's work. This parallel development approach
+          speeds up the overall development lifecycle.
+        </li>
+      </ul>
     </div>
   );
 };
