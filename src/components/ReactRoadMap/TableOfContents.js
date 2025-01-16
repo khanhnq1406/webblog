@@ -7,6 +7,9 @@ export const TableOfContent = () => {
           <a href="#functional-components">Functional Components</a>
           <ul className="list-disc">
             <li>
+              <a href="#jsx">Components</a>
+            </li>
+            <li>
               <a href="#jsx">JSX</a>
             </li>
             <li>

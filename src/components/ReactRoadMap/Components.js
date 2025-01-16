@@ -3,6 +3,79 @@ export const Components = () => {
   return (
     <div>
       <h1 id="functional-components">Functional Components</h1>
+      <h2 id="components">Components</h2>
+      <h3>Creating and nesting components</h3>
+      <p>
+        React apps are made out of components. A component is a piece of the UI
+        (user interface) that has its own logic and appearance. A component can
+        be as small as a button, or as large as an entire page.
+      </p>
+      <h3>React Component Types</h3>
+      <h4>React createClass</h4>
+      <p>
+        React initially relied on createClass (deprecated) for defining
+        components as a factory function to create React Class Components
+        without needing a JavaScript class. This approach was the standard for
+        building React components before the introduction of JavaScript ES6 in
+        2015, because JavaScript ES5 lacked the native class syntax
+      </p>
+      <h4>React Mixins (Pattern)</h4>
+      <p>
+        React Mixins (deprecated) got introduced as React's first pattern for
+        reusable component logic. With a Mixin in React, it was possible to
+        extract logic from a React component as a standalone object. When using
+        a Mixin in a component, all features from the Mixin are introduced to
+        the component
+      </p>
+      <h4>React Class Components</h4>
+      <p>
+        React Class Components (not recommended) were introduced in version
+        0.13, which was released in March 2015. Prior to this, developers used
+        the createClass function to define components, but eventually React
+        deprecated createClass in version 15.5 (April 2017) and recommended
+        using Class Components instead. Class Components were introduced as a
+        way to utilize native JavaScript classes (due to the ES6 release in
+        2015), because JS classes were made available to the language
+      </p>
+      <h4>React Higher-Order Components (Pattern)</h4>
+      <p>
+        React Higher-Order Components (HOCs) (not recommended anymore) have been
+        a popular advanced React pattern for reusable logic across React
+        components.
+      </p>
+      <h4>React Function Components</h4>
+      <p>
+        React Function Components (FC) (sometimes called Functional Components)
+        are used as replacement for React Class Components. They are expressed
+        as functions instead of classes. In the past, it wasn't possible to use
+        state or side-effects in FCs, that's why they were also called
+        Functional Stateless Components, but that's not the case anymore with
+        React Hooks which re-branded them to Function Components.
+      </p>
+      <h4>React Server Components</h4>
+      <p>
+        React's most recent addition (2023) are React Server Components (RSC)
+        which allow developers to execute components on the server. Main
+        benefits: only HTML is sent to the client and the component is allowed
+        to access server-side resources. Because Server Components execute on
+        the server, it's not possible to show a one to one comparison with the
+        previous examples, because they serve a different use case.
+      </p>
+      <h4>Async Components</h4>
+      <p>
+        Currently, Async Components are only supported for Server Components,
+        but they are expected to be supported for Client Components in the
+        future. If a component is marked as async, it can perform asynchronous
+        operations (e.g. fetching data).
+      </p>
+      <h3>React Elements vs Components</h3>
+      <p>
+        While a React Component is the one time declaration of a component, it
+        can be used once or multiple times as React Element in JSX. In JSX it
+        can be used with angle brackets, however, under the hood React's
+        createElement method kicks in to create React elements as JavaScript
+        object for each HTML element.
+      </p>
       <h2 id="jsx">JSX</h2>
       <p>
         JSX stands for JavaScript XML. <br />

@@ -96,6 +96,97 @@ export const Rendering = () => {
         array. Even if the position changes due to reordering, the key lets
         React identify the item throughout its lifetime.
       </p>
+
+      <h2>React Render Props</h2>
+      <p>
+        React components use props to communicate with each other. Every parent
+        component can pass some information to its child components by giving
+        them props. Props might remind you of HTML attributes, but you can pass
+        any JavaScript value through them, including objects, arrays, and
+        functions.
+      </p>
+      <ul className="list-disc">
+        <li>
+          To pass props, add them to the JSX, just like you would with HTML
+          attributes.
+        </li>
+        <li>
+          To read props, use the function {"Avatar({ person, size })"}{" "}
+          destructuring syntax.
+        </li>
+        <li>
+          You can specify a default value like size = 100, which is used for
+          missing and undefined props.
+        </li>
+        <li>
+          You can forward all props with {"<Avatar {...props} />"} JSX spread
+          syntax, but don’t overuse it!
+        </li>
+        <li>
+          Nested JSX like {"<Card><Avatar /></Card>"} will appear as Card
+          component’s children prop.
+        </li>
+        <li>
+          Props are read-only snapshots in time: every render receives a new
+          version of props.
+        </li>
+        <li>
+          You can’t change props. When you need interactivity, you’ll need to
+          set state.
+        </li>
+      </ul>
+
+      <h2>Refs</h2>
+      <p>
+        When you want a component to “remember” some information, but you don’t
+        want that information to trigger new renders, you can use a ref.
+      </p>
+      <p>
+        The ref points to a number, but, like state, you could point to
+        anything: a string, an object, or even a function. Unlike state, ref is
+        a plain JavaScript object with the current property that you can read
+        and modify.
+      </p>
+      <p>
+        Note that the component doesn’t re-render with every increment. Like
+        state, refs are retained by React between re-renders. However,{" "}
+        <b>setting state re-renders a component. Changing a ref does not!</b>
+      </p>
+      <h3>When to use refs </h3>
+      <p>
+        Typically, you will use a ref when your component needs to “step
+        outside” React and communicate with external APIs—often a browser API
+        that won’t impact the appearance of the component. Here are a few of
+        these rare situations:
+      </p>
+      <ul className="list-disc">
+        <li>Storing timeout IDs</li>
+        <li>
+          Storing and manipulating DOM elements, which we cover on the next page
+        </li>
+        <li>
+          Storing other objects that aren’t necessary to calculate the JSX.
+        </li>
+      </ul>
+      <h3>Refs and the DOM</h3>
+      <p>
+        You can point a ref to any value. However,{" "}
+        <b>the most common use case for a ref is to access a DOM element. </b>
+        For example, this is handy if you want to focus an input
+        programmatically. When you pass a ref to a ref attribute in JSX, like{" "}
+        {"<div ref={myRef}>"}, React will put the corresponding DOM element into
+        myRef.current. Once the element is removed from the DOM, React will
+        update myRef.current to be null
+      </p>
+      <h3>Manipulating the DOM with Refs</h3>
+      <p>
+        React automatically updates the DOM to match your render output, so your
+        components won’t often need to manipulate it. However, sometimes you
+        might need access to the DOM elements managed by React—for example, to
+        focus a node, scroll to it, or measure its size and position. There is
+        no built-in way to do those things in React, so you will need a ref to
+        the DOM node.
+      </p>
     </div>
   );
 };
