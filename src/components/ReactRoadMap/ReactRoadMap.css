@@ -10,16 +10,19 @@ h1 {
 h2 {
   font-size: x-large;
   font-weight: 700;
+  margin-left: 1rem;
 }
 
 h3 {
   font-size: larger;
   font-weight: 700;
+  margin-left: 2rem;
 }
 
 h4 {
   font-size: large;
   font-weight: 700;
+  margin-left: 3rem;
 }
 
 b,
@@ -28,4 +31,8 @@ i {
 }
 img {
   max-width: 700px;
+}
+p,
+ul {
+  margin-left: 3rem;
 }

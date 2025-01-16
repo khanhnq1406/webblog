@@ -2,26 +2,26 @@ import "./ReactRoadMap.css";
 export const Components = () => {
   return (
     <div>
-      <h1>Functional Components</h1>
-      <h2>JSX</h2>
-      <div>
+      <h1 id="functional-components">Functional Components</h1>
+      <h2 id="jsx">JSX</h2>
+      <p>
         JSX stands for JavaScript XML. <br />
         JSX allows us to write HTML in React. <br />
         JSX makes it easier to write and add HTML in React.
-      </div>
-      <div>
+      </p>
+      <p>
         The Web has been built on HTML, CSS, and JavaScript. For many years, web
         developers kept content in HTML, design in CSS, and logic in
         JavaScript—often in separate files! Content was marked up inside HTML
         while the page’s logic lived separately in JavaScript:
-      </div>
-      <div>
+      </p>
+      <p>
         But as the Web became more interactive, logic increasingly determined
         content. JavaScript was in charge of the HTML! This is why in React,
         rendering logic and markup live together in the same place—components.
-      </div>
-      <h2>State</h2>
-      <div>
+      </p>
+      <h2 id="state">State</h2>
+      <p>
         Components often need to change what’s on the screen as a result of an
         interaction. Typing into the form should update the input field,
         clicking “next” on an image carousel should change which image is
@@ -29,7 +29,7 @@ export const Components = () => {
         Components need to “remember” things: the current input value, the
         current image, the shopping cart. In React, this kind of
         component-specific memory is called state.
-      </div>
+      </p>
       <h3>When a regular variable isn’t enough</h3>
       <div>
         <ul className="list-disc">
@@ -46,7 +46,7 @@ export const Components = () => {
         </ul>
       </div>
       <h4>State is isolated and private</h4>
-      <h2>Props</h2>
+      <h2 id="props">Props</h2>
       <div className="grid grid-cols-2 items-center">
         <div>
           <div>
@@ -73,10 +73,8 @@ export const Components = () => {
         />
       </div>
       <h3>Lift state in React</h3>
-      <div>
-        There is no way to pass props from a child to a parent component.
-      </div>
-      <div>
+      <p>There is no way to pass props from a child to a parent component.</p>
+      <p>
         The important ingredient: the App component passes down a function in
         the props to the Button component.{" "}
         <b>
@@ -85,42 +83,40 @@ export const Components = () => {
           component)
         </b>
         , is used for the click handler in the Button component.
-      </div>
-      <div>
+      </p>
+      <p>
         Above in the App component, the state is changed when the passed
         function is called, and therefore the parent component and all its child
         components re-render.
-      </div>
+      </p>
       <h3>React's children prop</h3>
-      <div>
+      <p>
         The children prop in React can be used for composing React components
         into each other.
-      </div>
+      </p>
       <img
         src="https://miro.medium.com/v2/resize:fit:1400/1*IxsmOhlqRgxrxEeDP6yU9w.png"
         alt=""
       />
-      <h2>Conditional Rendering</h2>
-      <div>
+      <h2 id="conditional-rendering">Conditional Rendering</h2>
+      <p>
         Your component will often need to display different things depending on
         different conditions. In React, you can conditionally render JSX using
         JavaScript syntax like if statements, &&, and ?: operators.
-      </div>
-      <div>
-        You can return a JSX expression conditionally with an if statement.
-      </div>
-      <div>
+      </p>
+      <p>You can return a JSX expression conditionally with an if statement.</p>
+      <p>
         In JSX, {"{cond ? <A /> : <B />}"} means “if cond, render {"<A />"},
         otherwise {"<B />"}
         ”.
-      </div>
-      <div>
+      </p>
+      <p>
         In JSX,{" {cond && <A />}"} means “if cond, render {"<A />"}, otherwise
         nothing”.
-      </div>
-      <h2>Composition vs Inheritance</h2>
+      </p>
+      <h2 id="composition">Composition vs Inheritance</h2>
       <h3>Definition</h3>
-      <div>
+      <p>
         Component composition in React involves combining smaller, independent
         components to create complex UIs. Each sub-component can contain further
         components, enhancing code readability. This process breaks down the UI
@@ -128,13 +124,13 @@ export const Components = () => {
         maintenance. Component composition facilitates easier debugging and
         isolated changes, making web development more efficient and
         maintainable.
-      </div>
-      <div>
+      </p>
+      <p>
         You have seen how component composition is mainly used for reusable
         React components that require a well-designed API. Often you will find
         this kind of component composition just to layout your application as
         well.
-      </div>
+      </p>
       <h3>How can composition help performance?</h3>
       <ul className="list-disc">
         <li>
