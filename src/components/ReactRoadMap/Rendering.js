@@ -2,6 +2,89 @@ export const Rendering = () => {
   return (
     <div>
       <h1 id="rendering">Rendering</h1>
+      <h2 id="render-and-commit">Render and Commit</h2>
+      <p>
+        Imagine that your components are cooks in the kitchen, assembling tasty
+        dishes from ingredients. In this scenario, React is the waiter who puts
+        in requests from customers and brings them their orders. This process of
+        requesting and serving UI has three steps:
+        <ul className="list-disc">
+          <li>
+            <b>Triggering:</b> The waiter (React) asks the kitchen (components)
+            for the dishes (UI).
+          </li>
+          <li>
+            <b>Rendering:</b> The kitchen (the component tree) starts preparing
+            the dish (the UI).
+          </li>
+          <li>
+            <b>Committing:</b> The waiter (React) takes the prepared dish (the
+            UI) and serves it to the customer (the DOM).
+          </li>
+        </ul>
+      </p>
+      <img
+        alt=""
+        src="https://react.dev/images/docs/illustrations/i_render-and-commit2.png"
+      />
+      <h3>Step 1: Trigger a render</h3>
+      <p>
+        There are two reasons for a component to render:
+        <ul className="list-disc">
+          <li>
+            <b>Initial render:</b> When a component is first created, React will
+            render it.
+          </li>
+          <li>
+            <b>Update:</b> When the state or props of a component change, React
+            will re-render it.
+          </li>
+        </ul>
+      </p>
+      <h3>Step 2: React renders your components</h3>
+      <p>
+        After you trigger a render, React calls your components to figure out
+        what to display on screen.{" "}
+        <b>“Rendering” is React calling your components.</b>
+        <ul className="list-disc">
+          <li>
+            <b>On initial render,</b> React will call the root component.
+          </li>
+          <li>
+            <b>For subsequent renders,</b> React will call the function
+            component whose state update triggered the render.
+          </li>
+        </ul>
+      </p>
+      <p>
+        This process is recursive: if the updated component returns some other
+        component, React will render that component next, and if that component
+        also returns something, it will render that component next, and so on.
+        The process will continue until there are no more nested components and
+        React knows exactly what should be displayed on screen.
+      </p>
+      <h3>Step 3: React commits changes to the DOM</h3>
+      <p>
+        After rendering (calling) your components, React will modify the DOM.
+        <ul className="list-disc">
+          <li>
+            <b>For the initial render,</b> React will use the appendChild() DOM
+            API to put all the DOM nodes it has created on screen.
+          </li>
+          <li>
+            <b>For re-renders,</b> React will apply the minimal necessary
+            operations (calculated while rendering!) to make the DOM match the
+            latest rendering output.
+          </li>
+        </ul>
+      </p>
+      <h3>Epilogue: Browser paint</h3>
+      <p>
+        After rendering is done and React updated the DOM, the browser will
+        repaint the screen. Although this process is known as “browser
+        rendering”, we’ll refer to it as “painting” to avoid confusion
+        throughout the docs.
+      </p>
       <h2 id="component-life-cycle">Component Life Cycle</h2>
       <h3>The lifecycle of an Effect</h3>
       <p>Every React component goes through the same lifecycle:</p>
@@ -24,7 +107,7 @@ export const Rendering = () => {
         passed (we’ll refer to it as our “effect”), and call it later after
         performing the DOM updates.{" "}
       </p>
-      <div className="flex m-8">
+      <div className="flex m-8 flex-wrap">
         <img
           src="https://miro.medium.com/v2/resize:fit:720/format:webp/1*Mc3MMv04fUplw92BaJ82aQ.png"
           alt=""
