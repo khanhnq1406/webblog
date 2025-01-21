@@ -36,3 +36,10 @@ p,
 ul {
   margin-left: 3rem;
 }
+
+pre {
+  background-color: #231f20;
+  color: #f9f4da;
+  border-radius: 10px;
+  margin: 10px 3rem;
+}

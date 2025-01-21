@@ -270,6 +270,80 @@ export const Rendering = () => {
         no built-in way to do those things in React, so you will need a ref to
         the DOM node.
       </p>
+
+      <h2>Events</h2>
+      <h3>React `event` object</h3>
+      <h4>Properties</h4>
+      <ul className="list-disc">
+        <li>
+          <b>bubbles:</b> A boolean. Returns whether the event bubbles through
+          the DOM.
+        </li>
+        <li>
+          <b>cancelable:</b> A boolean. Returns whether the event can be
+          canceled.
+        </li>
+        <li>
+          <b>currentTarget:</b> A DOM node. Returns the node to which the
+          current handler is attached in the React tree.
+        </li>
+        <li>
+          <b>defaultPrevented:</b> A boolean. Returns whether preventDefault was
+          called.
+        </li>
+        <li>
+          <b>eventPhase:</b> A number. Returns which phase the event is
+          currently in.
+        </li>
+        <li>
+          <b>isTrusted:</b> A boolean. Returns whether the event was initiated
+          by user.
+        </li>
+        <li>
+          <b>target:</b> A DOM node. Returns the node on which the event has
+          occurred (which could be a distant child).
+        </li>
+        <li>
+          <b>timeStamp:</b> A number. Returns the time when the event occurred.
+        </li>
+      </ul>
+      <h4>Methods</h4>
+      <ul className="list-disc">
+        <li>
+          <b>preventDefault():</b> Prevents the default browser action for the
+          event.
+        </li>
+        <li>
+          <b>stopPropagation():</b> Stops the event propagation through the
+          React tree.
+        </li>
+      </ul>
+
+      <h2>High Order Components</h2>
+      <p>
+        A higher-order component (HOC) is an advanced technique in React for
+        reusing component logic. HOCs are not part of the React API, per se.
+        They are a pattern that emerges from React’s compositional nature.
+      </p>
+      <p>
+        Concretely, a higher-order component is a function that takes a
+        component and returns a new component with enhanced functionality or
+        behavior.
+      </p>
+      <p>
+        Higher-order components are not commonly used in modern React code. In
+        order to reuse logic, React hooks are mainly used now.
+      </p>
+      <pre>
+        {`
+          const HOC = (WrappedComponent) => {
+            return (props) => {
+              // Add additional logic or functionality here
+              return <WrappedComponent {...props} />;
+            };
+          };
+        `}
+      </pre>
     </div>
   );
 };
