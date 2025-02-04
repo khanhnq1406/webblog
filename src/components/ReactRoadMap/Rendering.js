@@ -180,7 +180,7 @@ export const Rendering = () => {
         React identify the item throughout its lifetime.
       </p>
 
-      <h2>React Render Props</h2>
+      <h2 id="react-render-props">React Render Props</h2>
       <p>
         React components use props to communicate with each other. Every parent
         component can pass some information to its child components by giving
@@ -219,7 +219,7 @@ export const Rendering = () => {
         </li>
       </ul>
 
-      <h2>Refs</h2>
+      <h2 id="refs">Refs</h2>
       <p>
         When you want a component to “remember” some information, but you don’t
         want that information to trigger new renders, you can use a ref.
@@ -271,7 +271,7 @@ export const Rendering = () => {
         the DOM node.
       </p>
 
-      <h2>Events</h2>
+      <h2 id="events">Events</h2>
       <h3>React `event` object</h3>
       <h4>Properties</h4>
       <ul className="list-disc">
@@ -319,7 +319,7 @@ export const Rendering = () => {
         </li>
       </ul>
 
-      <h2>High Order Components</h2>
+      <h2 id="high-order-components">High Order Components</h2>
       <p>
         A higher-order component (HOC) is an advanced technique in React for
         reusing component logic. HOCs are not part of the React API, per se.

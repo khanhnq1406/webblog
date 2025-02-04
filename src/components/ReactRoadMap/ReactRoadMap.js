@@ -1,4 +1,5 @@
 import { Components } from "./Components";
+import { Hooks } from "./Hooks";
 import "./ReactRoadMap.css";
 import { Rendering } from "./Rendering";
 import { TableOfContent } from "./TableOfContents";
@@ -9,6 +10,7 @@ export const ReactRoadMap = () => {
       <TableOfContent />
       <Components />
       <Rendering />
+      <Hooks />
     </div>
   );
 };

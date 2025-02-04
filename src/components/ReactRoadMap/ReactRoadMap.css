@@ -43,3 +43,14 @@ pre {
   border-radius: 10px;
   margin: 10px 3rem;
 }
+
+code,
+a {
+  padding: 0;
+}
+
+code {
+  background-color: #e8e8e9;
+  border-radius: 5px;
+  padding: 2px;
+}

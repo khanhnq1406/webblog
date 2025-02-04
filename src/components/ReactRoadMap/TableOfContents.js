@@ -26,8 +26,47 @@ export const TableOfContent = () => {
             </li>
           </ul>
         </li>
+
         <li>
           <a href="#rendering">Rendering</a>
+          <ul className="list-disc">
+            <li>
+              <a href="#render-and-commit">Render and Commit</a>
+            </li>
+            <li>
+              <a href="#component-life-cycle">Component Life Cycle</a>
+            </li>
+            <li>
+              <a href="#lists-and-key">Lists and Keys</a>
+            </li>
+            <li>
+              <a href="#react-render-props">React Render Props</a>
+            </li>
+            <li>
+              <a href="#refs">Refs</a>
+            </li>
+            <li>
+              <a href="#events">Events</a>
+            </li>
+            <li>
+              <a href="#high-order-components">High Order Components</a>
+            </li>
+          </ul>
+        </li>
+
+        <li>
+          <a href="#hooks">Hooks</a>
+          <ul className="list-disc">
+            <li>
+              <a href="#built-in-react-hooks">Built-in React Hooks</a>
+            </li>
+            <li>
+              <a href="#useState">useState</a>
+            </li>
+            <li>
+              <a href="#useEffect">useEffect</a>
+            </li>
+          </ul>
         </li>
       </ul>
     </div>
