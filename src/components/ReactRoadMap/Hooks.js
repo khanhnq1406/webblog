@@ -110,7 +110,6 @@ export const Hooks = () => {
           </li>
         </ul>
       </p>
-
       <h2 id="useState">useState</h2>
       <p>
         useState is a React Hook that lets you add a state variable to your
@@ -231,7 +230,6 @@ export const Hooks = () => {
             `}
         </pre>
       </p>
-
       <h2 id="useEffect">useEffect</h2>
       <p>
         useEffect is a React Hook that lets you synchronize a component with an
@@ -274,13 +272,491 @@ export const Hooks = () => {
           </li>
         </ul>
       </p>
-
       <h3>Returns</h3>
       <p>
         useEffect returns <code>undefined</code>
       </p>
-
       <h3>Caveats</h3>
+      <p>
+        <ul className="list-disc">
+          <li>
+            useEffect is a Hook, so you can only call it at the top level of
+            your component or your own Hooks. You can’t call it inside loops or
+            conditions. If you need that, extract a new component and move the
+            state into it.
+          </li>
+          <li>
+            When Strict Mode is on, React will run one extra development-only
+            setup+cleanup cycle before the first real setup. This is a
+            stress-test that ensures that your cleanup logic “mirrors” your
+            setup logic and that it stops or undoes whatever the setup is doing.
+          </li>
+          <li>
+            Effects only run on the client. They don’t run during server
+            rendering.
+          </li>
+        </ul>
+      </p>
+      <h3>Use cases</h3>
+      <h4>React useEffect Hook: Always</h4>
+      <pre>
+        {`
+        React.useEffect(() => {
+            console.log('I run on every render: mount + update.');
+        });
+        `}
+      </pre>
+      <h4>React useEffect Hook: Mount</h4>
+      <pre>
+        {`
+        React.useEffect(() => {
+            console.log('I run only on the first render: mount.');
+        }, []);
+        `}
+      </pre>
+      <h4>React useEffect Hook: Update</h4>
+      <pre>
+        {`
+        React.useEffect(() => {
+            console.log('I run only if toggle changes (and on mount).');
+        }, [toggle]);
+        `}
+      </pre>
+      <h4>React useEffect Hook: Only on Update</h4>
+      <pre>
+        {`
+        const didMount = React.useRef(false);   
+        React.useEffect(() => {
+            if (didMount.current) {
+                console.log('I run only if toggle changes.');
+            } else {
+                didMount.current = true;
+            }
+        }, [toggle]);
+        `}
+      </pre>
+      <h4>React useEffect Hook: Only Once</h4>
+      <pre>
+        {`
+        const calledOnce = React.useRef(false);
+        React.useEffect(() => {
+            if (calledOnce.current) {
+                return;
+            }
+            if (toggle === false) {
+                console.log('I run only once if toggle is false.');
+                calledOnce.current = true;
+            }
+        }, [toggle]);     	 
+        `}
+      </pre>
+      <h2 id="useCallback">useCallback</h2>
+      <p>
+        <code>useCallback</code> is a React hook that returns a memoized version
+        of a callback function. It’s used to optimize performance by preventing
+        unnecessary re-renders. Specifically, it helps avoid recreating
+        functions when their dependencies haven’t changed, which can be useful
+        when passing callbacks to child components that rely on referential
+        equality to prevent re-rendering.
+      </p>
+      <pre>const cachedFn = useCallback(fn, dependencies)</pre>
+      <pre>
+        {`
+        const handleSubmit = useCallback((orderDetails) => {
+            post('/product/' + productId + '/buy', {
+                referrer,
+                orderDetails,
+            });
+        }, [productId, referrer]);
+        `}
+      </pre>
+      <h3>Parameters</h3>
+      <p>
+        <ul className="list-disc">
+          <li>
+            <b>
+              <code>fn</code>
+            </b>
+            : The function value that you want to cache. It can take any
+            arguments and return any values. React will return (not call!) your
+            function back to you during the initial render. On next renders,
+            React will give you the same function again if the dependencies have
+            not changed since the last render. Otherwise, it will give you the
+            function that you have passed during the current render, and store
+            it in case it can be reused later. React will not call your
+            function. The function is returned to you so you can decide when and
+            whether to call it.
+          </li>
+          <li>
+            <b>
+              <code>dependencies</code>: The list of all reactive values
+              referenced inside of the <code>fn</code> code.{" "}
+            </b>
+          </li>
+        </ul>
+      </p>
+      <h3>Returns</h3>
+      <p>
+        On the initial render, useCallback returns the fn function you have
+        passed
+      </p>
+      <p>
+        During subsequent renders, it will either return an already stored fn
+        function from the last render (if the dependencies haven’t changed), or
+        return the fn function you have passed during this render.
+      </p>
+      <h2 id="useMemo">useMemo</h2>
+      <p>
+        <b>
+          <code>useMemo</code>
+        </b>{" "}
+        is a React hook that memoizes the result of a function. It is used to
+        optimize performance by caching the result of a function and returning
+        the cached result when the inputs to the function have not changed.
+      </p>
+      <pre>const cachedValue = useMemo(calculateValue, dependencies)</pre>
+      <h3>Parameters</h3>
+      <p>
+        <ul className="list-disc">
+          <li>
+            <b>
+              <code>calculateValue</code>
+            </b>
+            : The function calculating the value that you want to cache. It
+            should be pure, should take no arguments, and should return a value
+            of any type. React will call your function during the initial
+            render. On next renders, React will return the same value again if
+            the dependencies have not changed since the last render. Otherwise,
+            it will call calculateValue, return its result, and store it so it
+            can be reused later.
+          </li>
+          <li>
+            <b>
+              <code>dependencies</code>
+            </b>
+            : The list of all reactive values referenced inside of the
+            calculateValue code
+          </li>
+        </ul>
+      </p>
+      <h3>Returns</h3>
+      <p>
+        On the initial render, useMemo returns the result of calling
+        calculateValue with no arguments.
+      </p>
+      <p>
+        During next renders, it will either return an already stored value from
+        the last render (if the dependencies haven’t changed), or call
+        calculateValue again, and return the result that calculateValue has
+        returned.
+      </p>
+      <h2 id="useRef">useRef</h2>
+      <p>
+        useRef is a React Hook that lets you reference a value that’s not needed
+        for rendering.
+      </p>
+      <pre>const ref = useRef(initialValue)</pre>
+      <h3>Parameters</h3>
+      <ul className="list-disc">
+        <li>
+          <b>
+            <code>initialValue</code>
+          </b>
+          : The value you want the ref object’s current property to be
+          initially. It can be a value of any type. This argument is ignored
+          after the initial render.
+        </li>
+      </ul>
+      <h3>Returns</h3>
+      <p>
+        <b>
+          <code>useRef</code>
+        </b>{" "}
+        returns an object with a single property:
+        <ul className="list-disc">
+          <b>
+            <code>current</code>
+          </b>
+          : Initially, it’s set to the initialValue you have passed. You can
+          later set it to something else. If you pass the ref object to React as
+          a ref attribute to a JSX node, React will set its current property.
+        </ul>
+      </p>
+      <h3>Usage</h3>
+      <p>
+        By using a ref, you ensure that:
+        <ul className="list-disc">
+          <li>
+            You can store information between re-renders (unlike regular
+            variables, which reset on every render).
+          </li>
+          <li>
+            Changing it does not trigger a re-render (unlike state variables,
+            which trigger a re-render).
+          </li>
+          <li>
+            The information is local to each copy of your component (unlike the
+            variables outside, which are shared).
+          </li>
+        </ul>
+      </p>
+      <h2 id="useReducer">useReducer</h2>
+      <p>
+        useReducer is a React Hook that lets you add a reducer to your
+        component.
+      </p>
+      <pre>
+        const [state, dispatch] = useReducer(reducer, initialArg, init?)
+      </pre>
+      <h3>Parameters</h3>
+      <p>
+        <ul className="list-disc">
+          <li>
+            <b>
+              <code>reducer</code>
+            </b>
+            : The reducer function that specifies how the state gets updated. It
+            must be pure, should take the state and action as arguments, and
+            should return the next state. State and action can be of any types.
+          </li>
+          <li>
+            <b>
+              <code>initialArg</code>
+            </b>
+            : The value from which the initial state is calculated. It can be a
+            value of any type. How the initial state is calculated from it
+            depends on the next init argument.
+          </li>
+          <li>
+            <b>
+              optional <code>init</code>
+            </b>
+            : The initializer function that should return the initial state. If
+            it’s not specified, the initial state is set to initialArg.
+            Otherwise, the initial state is set to the result of calling
+            init(initialArg).
+          </li>
+        </ul>
+      </p>
+      <h3>Returns</h3>
+      <p>
+        useReducer returns an array with exactly two values:
+        <ul className="list-decimal">
+          <li>
+            <b>The current state.</b> During the first render, it’s set to
+            init(initialArg) or initialArg (if there’s no init).
+          </li>
+          <li>
+            The dispatch function that lets you update the state to a different
+            value and trigger a re-render.
+          </li>
+        </ul>
+      </p>
+      <h3>
+        <code>dispatch</code> function
+      </h3>
+      <p>
+        The dispatch function returned by useReducer lets you update the state
+        to a different value and trigger a re-render. You need to pass the
+        action as the only argument to the dispatch function:
+      </p>
+      <pre>
+        {`
+        const [state, dispatch] = useReducer(reducer, { age: 42 });
+
+        function handleClick() {
+            dispatch({ type: 'incremented_age' });
+        // ...
+        `}
+      </pre>
+      <p>
+        React will set the next state to the result of calling the reducer
+        function you’ve provided with the current state and the action you’ve
+        passed to dispatch.
+      </p>
+      <h4>Parameters</h4>
+      <p>
+        <b>
+          <code>action</code>
+        </b>
+        : The action performed by the user. It can be a value of any type. By
+        convention, an action is usually an object with a type property
+        identifying it and, optionally, other properties with additional
+        information.
+      </p>
+
+      <h2 id="useContext">useContext</h2>
+      <p>
+        Usually, you will pass information from a parent component to a child
+        component via props. But passing props can become verbose and
+        inconvenient if you have to pass them through many components in the
+        middle, or if many components in your app need the same information.
+        <b>Context</b> lets the parent component make some information available
+        to any component in the tree below it—no matter how deep—without passing
+        it explicitly through props.
+      </p>
+      <p>
+        The <code>useContext</code> Hook lets us share data between components
+        without having to pass props down through every level of the component
+        tree. This is particularly useful when many components need to access
+        the same data or when components are deeply nested.
+      </p>
+      <pre>const value = useContext(SomeContext)</pre>
+      <h3>Parameters</h3>
+      <p>
+        <b>
+          <code>SomeContext</code>
+        </b>
+        : The context that you’ve previously created with{" "}
+        <a href="#createContext" className="text-blue-600 font-semibold">
+          createContext
+        </a>
+        . The context itself does not hold the information, it only represents
+        the kind of information you can provide or read from components.
+      </p>
+      <h3>Returns</h3>
+      <p>
+        <code>useContext</code> returns the context value for the calling
+        component. It is determined as the value passed to the closest
+        SomeContext.Provider above the calling component in the tree. If there
+        is no such provider, then the returned value will be the defaultValue
+        you have passed to createContext for that context. The returned value is
+        always up-to-date. React automatically re-renders components that read
+        some context if it changes.
+      </p>
+      <h3>Caveats</h3>
+      <p>
+        <ul className="list-disc">
+          <li>
+            useContext() call in a component is not affected by providers
+            returned from the same component. The corresponding{" "}
+            {"<Context.Provider>"} needs to be above the component doing the
+            useContext() call.
+          </li>
+          <li>
+            React automatically re-renders all the children that use a
+            particular context starting from the provider that receives a
+            different value.
+          </li>
+        </ul>
+      </p>
+      <img
+        alt=""
+        src="https://dmitripavlutin.com/90649ae4bdf379c482ad24e0dd220bc4/react-context-3.svg"
+      />
+      <h3>Optimizing re-renders when passing objects and functions</h3>
+      <pre>
+        {`
+        import { useCallback, useMemo } from 'react';
+
+        function MyApp() {
+          const [currentUser, setCurrentUser] = useState(null);
+
+          const login = useCallback((response) => {
+            setCurrentUser(response.user);
+          }, []);
+
+          const contextValue = useMemo(() => ({
+            currentUser,
+            login
+          }), [currentUser, login]);
+
+          return (
+            <AuthContext.Provider value={contextValue}>
+              <Page />
+            </AuthContext.Provider>
+          );
+        }
+        `}
+      </pre>
+
+      <h2 id="createContext">createContext</h2>
+      <p>Call createContext outside of any components to create a context.</p>
+      <pre>const SomeContext = createContext(defaultValue)</pre>
+      <h3>Parameters</h3>
+      <p>
+        <b>
+          <code>defaultValue</code>
+        </b>
+        : The value that you want the context to have when there is no matching
+        context provider in the tree above the component that reads context. If
+        you don’t have any meaningful default value, specify null. The default
+        value is meant as a “last resort” fallback. It is static and never
+        changes over time.
+      </p>
+      <h3>Returns</h3>
+      <p>
+        The context object itself does not hold any information. It represents
+        which context other components read or provide. Typically, you will use
+        SomeContext.Provider in components above to specify the context value,
+        and call useContext(SomeContext) in components below to read it. The
+        context object has a few properties:
+        <ul className="list-disc">
+          <li>
+            <code>SomeContext.Provider</code> lets you provide the context value
+            to components.
+          </li>
+          <li>
+            <code>SomeContext.Consumer</code> is an alternative and rarely used
+            way to read the context value.
+          </li>
+        </ul>
+      </p>
+      <h3>
+        <b>
+          <code>SomeContext.Provider</code>
+        </b>
+      </h3>
+      <h4>Props</h4>
+      <p>
+        <b>
+          <code>value</code>
+        </b>
+        : The value that you want to pass to all the components reading this
+        context inside this provider, no matter how deep. The context value can
+        be of any type. A component calling{" "}
+        <a href="#useContext" className="text-blue-600 font-semibold">
+          useContext(SomeContext)
+        </a>{" "}
+        inside of the provider receives the value of the innermost corresponding
+        context provider above it.
+      </p>
+      <h3>
+        <b>
+          <code>SomeContext.Consumer</code> (not recommended)
+        </b>
+      </h3>
+      <p>
+        Before useContext existed, using <code>Consumer</code> was an older way
+        to read context.
+      </p>
+      <h3>Importing and exporting context from a file </h3>
+      <p>
+        Often, components in different files will need access to the same
+        context. This is why it’s common to declare contexts in a separate file.
+        Then you can use the export statement to make context available for
+        other files:
+      </p>
+      <pre>
+        {`
+        // Contexts.js
+        import { createContext } from 'react';
+
+        export const ThemeContext = createContext('light');
+        export const AuthContext = createContext(null);
+        `}
+      </pre>
+      <pre>
+        {`
+        // Button.js
+        import { ThemeContext } from './Contexts.js';
+
+        function Button() {
+          const theme = useContext(ThemeContext);
+          // ...
+        }
+        `}
+      </pre>
     </div>
   );
 };

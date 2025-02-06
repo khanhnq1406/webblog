@@ -66,6 +66,24 @@ export const TableOfContent = () => {
             <li>
               <a href="#useEffect">useEffect</a>
             </li>
+            <li>
+              <a href="#useCallback">useCallback</a>
+            </li>
+            <li>
+              <a href="#useMemo">useMemo</a>
+            </li>
+            <li>
+              <a href="#useRef">useRef</a>
+            </li>
+            <li>
+              <a href="#useReducer">useReducer</a>
+            </li>
+            <li>
+              <a href="#useContext">useContext</a>
+            </li>
+            <li>
+              <a href="#createContext">createContext</a>
+            </li>
           </ul>
         </li>
       </ul>
