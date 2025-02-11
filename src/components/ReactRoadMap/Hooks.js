@@ -670,7 +670,7 @@ export const Hooks = () => {
         `}
       </pre>
 
-      <h2 id="createContext">createContext</h2>
+      <h2 id="createContext">createContext (is not a hook)</h2>
       <p>Call createContext outside of any components to create a context.</p>
       <pre>const SomeContext = createContext(defaultValue)</pre>
       <h3>Parameters</h3>
@@ -757,6 +757,49 @@ export const Hooks = () => {
         }
         `}
       </pre>
+
+      <h2 id="react-hooks-best-practices">React Hooks Best Practices</h2>
+      <p>
+        References:{" "}
+        <a
+          href="https://medium.com/womenintechnology/react-hooks-best-practices-unlocking-efficiency-and-elegance-da23f7e1418a"
+          className="text-blue-600 font-semibold"
+        >
+          React Hooks Best Practices: Unlocking Efficiency and Elegance
+        </a>
+      </p>
+      <h3>Use Hooks at the Top Level</h3>
+      <p>
+        To ensure consistent behavior and prevent unexpected issues, always call
+        Hooks at the top level of your functional component. Avoid placing them
+        within loops, conditions, or nested functions. By following this
+        practice, you guarantee that Hooks are executed in the same order on
+        every render, providing predictable results.
+      </p>
+      <h3>Optimize useEffect with Dependency Arrays</h3>
+      <h3>Memoize Expensive Computations</h3>
+      <p>
+        To optimize performance, utilize the useCallback and useMemo Hooks.
+        <b>useCallback memoizes a function</b>, preventing it from being
+        recreated on each render. This is particularly useful when passing
+        functions as props to child components.{" "}
+        <b>useMemo memoizes the result of expensive computations</b>, avoiding
+        unnecessary recalculations.
+      </p>
+      <h3>Encapsulate Logic in Custom Hooks</h3>
+      <h3>Use Effect Cleanup</h3>
+      <p>
+        Leverage the useEffect hook’s cleanup function to handle resource
+        cleanup and unsubscribe from subscriptions or event listeners. Failing
+        to clean up can lead to memory leaks and unexpected behavior.
+      </p>
+      <h3>Separate Side Effects with useEffect</h3>
+      <p>
+        Avoid bundling multiple unrelated side effects within a single
+        useEffect. Instead, create separate useEffect hooks to clearly express
+        the intention and maintain a clean and predictable code structure.
+      </p>
+      <h3>Keep Hooks Focused and Simple</h3>
     </div>
   );
 };

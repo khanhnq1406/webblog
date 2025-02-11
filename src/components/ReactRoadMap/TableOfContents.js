@@ -82,7 +82,12 @@ export const TableOfContent = () => {
               <a href="#useContext">useContext</a>
             </li>
             <li>
-              <a href="#createContext">createContext</a>
+              <a href="#createContext">createContext (is not a hook)</a>
+            </li>
+            <li>
+              <a href="#react-hooks-best-practices">
+                React Hooks Best Practices
+              </a>
             </li>
           </ul>
         </li>
