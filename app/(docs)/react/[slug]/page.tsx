@@ -12,24 +12,26 @@ export async function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const { slug } = await params;
   try {
-    const { frontmatter } = getContentBySlug("react", params.slug);
+    const { frontmatter } = getContentBySlug("react", slug);
     return { title: frontmatter.title, description: frontmatter.description };
   } catch {
     return { title: "React" };
   }
 }
 
-export default function ReactSlugPage({
+export default async function ReactSlugPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  if (!VALID_SLUGS.includes(params.slug)) notFound();
+  const { slug } = await params;
+  if (!VALID_SLUGS.includes(slug)) notFound();
   try {
-    const { content, frontmatter } = getContentBySlug("react", params.slug);
+    const { content, frontmatter } = getContentBySlug("react", slug);
     return <DocPage frontmatter={frontmatter} content={content} />;
   } catch {
     notFound();

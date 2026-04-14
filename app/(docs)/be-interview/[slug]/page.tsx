@@ -12,24 +12,26 @@ export async function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const { slug } = await params;
   try {
-    const { frontmatter } = getContentBySlug("be-interview", params.slug);
+    const { frontmatter } = getContentBySlug("be-interview", slug);
     return { title: frontmatter.title, description: frontmatter.description };
   } catch {
     return { title: "Backend Interview" };
   }
 }
 
-export default function BeInterviewSlugPage({
+export default async function BeInterviewSlugPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  if (!VALID_SLUGS.includes(params.slug)) notFound();
+  const { slug } = await params;
+  if (!VALID_SLUGS.includes(slug)) notFound();
   try {
-    const { content, frontmatter } = getContentBySlug("be-interview", params.slug);
+    const { content, frontmatter } = getContentBySlug("be-interview", slug);
     return <DocPage frontmatter={frontmatter} content={content} />;
   } catch {
     notFound();

@@ -1,4 +1,5 @@
-import { MDXRemote } from "next-mdx-remote/rsc";
+import * as runtime from "react/jsx-runtime";
+import { compile, run } from "@mdx-js/mdx";
 import rehypePrettyCode from "rehype-pretty-code";
 import rehypeSlug from "rehype-slug";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
@@ -9,26 +10,37 @@ import { TableOfContents } from "@/components/layout/toc";
 import { extractToc } from "@/lib/toc";
 import type { FrontMatter } from "@/lib/mdx";
 
-const mdxOptions = {
-  remarkPlugins: [remarkGfm],
-  rehypePlugins: [
-    rehypeSlug,
-    [
-      rehypeAutolinkHeadings,
-      {
-        behavior: "wrap",
-        properties: { className: ["anchor"], ariaLabel: "Link to section" },
-      },
-    ],
-    [
-      rehypePrettyCode,
-      {
-        theme: { light: "github-light", dark: "github-dark" },
-        keepBackground: true,
-      },
-    ],
-  ] as any,
-};
+async function MDXContent({ source }: { source: string }) {
+  const compiled = await compile(source, {
+    outputFormat: "function-body",
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [
+      rehypeSlug,
+      [
+        rehypeAutolinkHeadings,
+        {
+          behavior: "wrap",
+          properties: { className: ["anchor"], ariaLabel: "Link to section" },
+        },
+      ],
+      [
+        rehypePrettyCode,
+        {
+          theme: { light: "github-light", dark: "github-dark" },
+          keepBackground: true,
+        },
+      ],
+    ] as any,
+  });
+
+  const { default: Content } = await run(String(compiled), {
+    ...(runtime as any),
+    baseUrl: import.meta.url,
+  });
+
+  const components = getMDXComponents();
+  return <Content components={components} />;
+}
 
 export function DocPage({
   frontmatter,
@@ -62,11 +74,7 @@ export function DocPage({
           )}
         </div>
         <div className="prose prose-zinc dark:prose-invert max-w-none prose-dark-fix">
-          <MDXRemote
-            source={content}
-            components={getMDXComponents()}
-            options={{ mdxOptions }}
-          />
+          <MDXContent source={content} />
         </div>
       </main>
       <TableOfContents items={toc} />
