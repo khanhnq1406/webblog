@@ -16,6 +16,8 @@ Imagine that your components are cooks in the kitchen, assembling tasty dishes f
 - **Rendering:** The kitchen (the component tree) starts preparing the dish (the UI).
 - **Committing:** The waiter (React) takes the prepared dish (the UI) and serves it to the customer (the DOM).
 
+![Render and Commit](https://react.dev/images/docs/illustrations/i_render-and-commit2.png)
+
 ### Step 1: Trigger a render
 
 There are two reasons for a component to render:
@@ -54,6 +56,10 @@ Every React component goes through the same lifecycle:
 - A component **unmounts** when it's **removed** from the screen.
 
 By using this useEffect Hook, you tell React that your component needs to do something after render. React will remember the function you passed (we'll refer to it as our "effect"), and call it later after performing the DOM updates.
+
+![React Component Lifecycle](https://miro.medium.com/v2/resize:fit:720/format:webp/1*Mc3MMv04fUplw92BaJ82aQ.png)
+
+![React Lifecycle Diagram](https://bairesdev.mo.cloudinary.net/blog/2023/03/react-lifecycle-1024x417.png)
 
 **componentDidMount()** — a lifecycle method that runs after the component is mounted and rendered to the DOM.
 

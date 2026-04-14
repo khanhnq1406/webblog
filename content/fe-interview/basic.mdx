@@ -43,6 +43,8 @@ Every HTML element is represented as a rectangular box. The CSS box model descri
 
 By default (`box-sizing: content-box`), `width` and `height` apply only to the content area. With `box-sizing: border-box`, they include padding and border, making layout calculations easier.
 
+![CSS Box Model](https://miro.medium.com/v2/resize:fit:2560/1*nmdxvJbL2GI5NQSXCLOskA.png)
+
 ---
 
 ## 3. What is the difference between `inline`, `inline-block`, and `block` elements?
@@ -59,6 +61,8 @@ Examples:
 - **Inline:** `<span>`, `<a>`, `<strong>`
 - **Inline-block:** `<img>`, `<button>`
 - **Block:** `<div>`, `<p>`, `<h1>`–`<h6>`
+
+![inline vs inline-block vs block](https://cohesiondocs.acquia.com/sites/default/files/images/apply-styles/display-diagram-type-as-shape.svg)
 
 ---
 
@@ -96,6 +100,8 @@ document.body.appendChild(para);
 ```
 
 The DOM is not the same as HTML source code — it is a live, in-memory representation that can change as JavaScript runs.
+
+![DOM tree example](https://www.w3schools.com/whatis/img_htmltree.gif)
 
 ---
 
@@ -147,6 +153,8 @@ console.log(null == undefined);  // true  (loose equality)
 console.log(null === undefined); // false (strict equality)
 ```
 
+![null vs undefined](https://codingnomads.com/images/ef21dcae-9744-4bbe-fe90-8546f7f27700/public)
+
 ---
 
 ## 8. What is the difference between cookies, `sessionStorage`, and `localStorage`?
@@ -162,6 +170,8 @@ All three are mechanisms for storing data in the browser, but they differ in sco
 | Scope | All windows/tabs (same origin) | Current tab only | All windows/tabs (same origin) |
 
 Use cookies for authentication tokens that need to be sent to the server. Use `sessionStorage` for temporary, tab-specific data. Use `localStorage` for persistent client-side data like user preferences.
+
+![cookies vs sessionStorage vs localStorage](https://miro.medium.com/v2/resize:fit:720/format:webp/1*1UmPsjJaHEnLOiPHgQ2mFw.jpeg)
 
 ---
 
@@ -180,6 +190,8 @@ When a browser loads a web page, it follows several steps:
 9. **Compositing** — Layers are composited together in the correct order.
 
 JavaScript can block HTML parsing if it appears before the content (use `defer` or `async` attributes to avoid this).
+
+![Browser rendering process](https://cdn.prod.website-files.com/61ade8b25c29d61e883b12a4/657da9e83ad99312ed70cc37_image%20441.webp)
 
 ---
 
