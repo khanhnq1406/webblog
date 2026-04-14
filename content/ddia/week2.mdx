@@ -34,21 +34,48 @@ The most common approach:
 
 **Asynchronous replication**: leader doesn't wait. Faster writes, but data can be lost if leader fails before replicating.
 
-**Semi-synchronous**: one follower is synchronous, others async. Common in practice.
+**Semi-synchronous**: one follower is synchronous, others async. Common in practice. If the synchronous follower becomes unavailable, one of the asynchronous followers is promoted to synchronous. This guarantees an up-to-date copy on at least two nodes (the leader and one synchronous follower).
+
+> **Research variant — Chain replication**: a form of synchronous replication that achieves good performance by chaining writes through a sequence of nodes. Successfully implemented in systems like Microsoft Azure Storage. It offers a strong connection between replication consistency and consensus, which is explored further in distributed consensus literature.
+
+### Setting Up New Followers
+
+You can't simply copy data files from the leader — the data is always in flux. Locking the leader would defeat the purpose of high availability. Instead, the process is:
+
+1. **Snapshot** the leader's database at some point in time (without taking a lock on the entire database — most databases support this)
+2. **Copy** that snapshot to the new follower node
+3. The follower connects to the leader and **requests all data changes since the snapshot** — this requires the snapshot to be associated with an exact position in the leader's replication log (PostgreSQL calls this the *log sequence number*; MySQL calls it the *binlog coordinates*)
+4. Once the follower has processed the backlog of changes, it has **caught up** and can continue to process new changes as they happen
+
+> **Key point:** the snapshot must be linked to a precise position in the replication log. Without that position marker, the follower wouldn't know where to start requesting changes.
 
 ### Handling Node Outages
 
 **Follower failure (catch-up recovery)**: follower reconnects, requests all changes since its last known position in the replication log.
 
 **Leader failure (failover)**:
-1. Determine leader has failed (usually via timeout)
-2. Elect a new leader (most up-to-date follower)
-3. Reconfigure clients to send writes to new leader
+1. Determine leader has failed (usually via timeout — e.g., 30 seconds with no heartbeat response)
+2. Elect a new leader (most up-to-date follower, chosen by election or appointed by a controller node)
+3. Reconfigure clients to send writes to new leader; ensure old leader becomes a follower if it comes back
 
 Failover pitfalls:
-- New leader may not have all writes from old leader → **data loss**
-- Split brain: two nodes both think they're leader → conflicting writes
-- Wrong timeout length: too short → unnecessary failovers, too long → long downtime
+- New leader may not have all writes from old leader — **data loss** (unreplicated writes are typically discarded)
+- Split brain: two nodes both think they're leader — conflicting writes
+- Wrong timeout length: too short — unnecessary failovers under load spikes, too long — long downtime
+
+#### The GitHub Incident
+
+A real-world failure illustrating the danger of discarding writes during failover:
+
+> An **out-of-date MySQL follower was promoted to leader** at GitHub. The database used an autoincrementing counter to assign primary keys to new rows. Because the new leader's counter **lagged behind the old leader's**, it reused some primary keys that had already been assigned by the old leader. Those primary keys were also stored in a **Redis** cache. The reuse caused **inconsistency between MySQL and Redis**, which resulted in **private data being disclosed to the wrong users**.
+
+This incident demonstrates why discarding unreplicated writes is especially dangerous when other storage systems (caches, search indexes) outside the database must stay coordinated with the database contents.
+
+#### STONITH (Shoot The Other Node In The Head)
+
+When split brain is detected (two nodes both believe they are leader), some systems use a safety mechanism called **STONITH** — forcibly shutting down one node to prevent conflicting writes.
+
+> **Caveat:** if the STONITH mechanism is not carefully designed, you can end up with **both nodes being shut down**, making the system completely unavailable instead of resolving the conflict.
 
 ### Replication Logs
 
@@ -56,46 +83,196 @@ How the leader sends changes to followers:
 
 | Method | How | Problem |
 |--------|-----|---------|
-| Statement-based | Send SQL statements | Non-deterministic functions (NOW(), RAND()) |
+| Statement-based | Send SQL statements | Non-deterministic functions, ordering dependencies |
 | WAL shipping | Send write-ahead log bytes | Tightly coupled to storage engine version |
 | Row-based (logical) | Send description of rows changed | Most widely used today |
+
+#### Statement-Based Replication — Issues in Detail
+
+Although sending SQL statements sounds straightforward, several problems arise:
+
+- **`NOW()` and `RAND()`** produce different values on each replica, leading to divergent data
+- **`AUTOINCREMENT` columns** and statements with `WHERE` conditions depending on existing data must be executed in **exactly the same order** on each replica — limiting concurrency
+- **Triggers, stored procedures, and user-defined functions** may produce non-deterministic side effects on different replicas
+
+> **MySQL's workaround:** the leader replaces non-deterministic function calls with a **fixed return value** when logging the statement, so all followers get the same value. Despite this, MySQL now defaults to row-based replication due to the many edge cases.
 
 ### Problems with Replication Lag
 
 Asynchronous replication means followers can be behind the leader. This causes **eventual consistency** — followers will *eventually* catch up, but may temporarily be inconsistent.
 
-**Read-your-own-writes (read-after-write consistency)**: user writes something, then reads it back — but reads from a lagging replica that doesn't have it yet. Fix: always read your own recent writes from the leader.
+#### Read-After-Write (Read-Your-Own-Writes) Consistency
 
-**Monotonic reads**: user reads from replica A (recent data), then replica B (stale data) — appears to go back in time. Fix: user always reads from the same replica.
+User writes something, then reads it back — but reads from a lagging replica that doesn't have it yet.
 
-**Consistent prefix reads**: if writes happen in causal order, reads should see them in the same order. Fix: causally related writes go to same partition.
+**Implementation strategies:**
+
+| Strategy | How it works |
+|----------|-------------|
+| Read from leader for user's own data | If the user could have modified it, always read from the leader (e.g., always read your own profile from the leader) |
+| Time-based leader reads | Track the time of last update; for N seconds after the last write, read all data from the leader |
+| Monitor replication lag | Prevent queries on any follower that is more than N seconds behind the leader |
+| Client-tracked timestamps | Client remembers the timestamp of its most recent write; system ensures the serving replica is caught up to at least that timestamp (can be a logical timestamp like the log sequence number) |
+
+#### Cross-Device Read-After-Write
+
+When the same user accesses the service from multiple devices (desktop + mobile), additional complications arise:
+
+- **Token/timestamp remembering fails across devices** — one device's local storage is not available to another device. This metadata must be **centralized** (e.g., stored server-side).
+- **Different devices may route through different datacenters** — if your approach requires reading from the leader, you must ensure requests from all of a user's devices route to the **same datacenter** containing the leader.
+
+#### Monotonic Reads
+
+A user makes several reads from different replicas. First read returns a recent value; second read (routed to a more lagging replica) returns an older value. Time appears to go backward.
+
+This commonly happens when a user refreshes a web page and each request is routed to a random server. A comment they saw moments ago suddenly disappears.
+
+**Monotonic reads** is a guarantee that this doesn't happen: if a user has seen data at one point in time, they won't subsequently see data from an earlier point.
+
+**Fix:** each user always reads from the same replica (chosen by a hash of the user ID). If that replica fails, reroute to another.
+
+#### Consistent Prefix Reads
+
+If writes happen in causal order, reads should see them in the same order. Example:
+
+> **Mr. Poons:** How far into the future can you see, Mrs. Cake?  
+> **Mrs. Cake:** About ten seconds usually, Mr. Poons.
+
+If Mrs. Cake's reply goes through a low-lag replica and Mr. Poons's question through a high-lag replica, a third-party observer might see the answer before the question — making Mrs. Cake appear psychic.
+
+This is a particular problem in **partitioned databases** where different partitions operate independently with no global ordering of writes.
+
+**Fix:** ensure causally related writes go to the same partition. Alternatively, use algorithms that explicitly track causal dependencies.
 
 ### Multi-Leader Replication
 
-Multiple nodes accept writes. Each leader replicates to others.
+Multiple nodes accept writes. Each leader simultaneously acts as a follower to the other leaders.
 
-Use cases:
-- Multi-datacenter operation (one leader per datacenter)
-- Offline-capable clients (your device is a leader, syncs when online)
-- Collaborative editing (Google Docs style)
+**Use cases:**
 
-**Write conflicts** are the biggest challenge. Two users edit the same record simultaneously on different leaders — both writes are "valid" locally. Strategies:
-- **Avoid conflicts**: route all writes for a user to the same leader
-- **Last-write-wins (LWW)**: use timestamps, accept data loss
-- **Merge**: merge conflicting values (works for some data types, e.g., shopping cart)
-- **CRDTs**: data structures designed to merge automatically (Conflict-free Replicated Data Types)
+**Multi-datacenter operation**: one leader per datacenter. Within each datacenter, regular leader-follower replication is used. Between datacenters, each leader replicates to leaders in other datacenters asynchronously.
+
+| Aspect | Single-leader | Multi-leader |
+|--------|--------------|-------------|
+| Write latency | Every write goes over internet to leader's datacenter | Writes processed in local datacenter, replicated async |
+| Datacenter outage | Must promote follower in another datacenter | Each datacenter continues independently |
+| Network tolerance | Sensitive to inter-datacenter link (synchronous writes) | Tolerates network problems better (async replication) |
+
+**Offline-capable clients**: every device has a local database that acts as a leader. Changes sync when the device comes online. The replication lag may be hours or days. From an architectural view, each device is a "datacenter" with an extremely unreliable network connection.
+
+**Collaborative editing**: Google Docs, Etherpad. Each user's changes are applied instantly to their local state and replicated to others asynchronously. To avoid conflicts, you could lock the document per user (equivalent to single-leader), but for real-time collaboration, the unit of change is made very small (e.g., single keystroke) and conflicts are resolved automatically using techniques like operational transformation or CRDTs.
+
+#### Conflict Detection: Synchronous vs Asynchronous
+
+In a **single-leader** database, conflict detection is synchronous: the second writer will either **block and wait** for the first write to complete, or the second write transaction is **aborted**, forcing the user to retry.
+
+In a **multi-leader** setup, both writes succeed locally, and the conflict is only detected **asynchronously** at some later point in time. By then, it may be **too late to ask the user** to resolve the conflict.
+
+> You *could* make conflict detection synchronous in a multi-leader setup — wait for the write to be replicated to all replicas before confirming success. However, this **loses the main advantage** of multi-leader replication: allowing each replica to accept writes independently. If you want synchronous conflict detection, you might as well use single-leader replication.
+
+#### Write Conflict Strategies
+
+- **Avoid conflicts**: route all writes for a particular record through the same leader. For example, ensure requests from a user always go to the same datacenter. However, if that datacenter fails and traffic must be rerouted, conflict avoidance breaks down.
+- **Last-write-wins (LWW)**: attach a unique ID (timestamp, UUID) to each write; pick the highest as the winner. Achieves convergence but is **dangerously prone to data loss** — even non-concurrent writes can be dropped due to clock skew.
+- **Merge**: merge conflicting values (works for some data types, e.g., concatenate strings, union sets). Amazon's shopping cart used this approach, but a bug caused removed items to reappear.
+- **CRDTs**: Conflict-free Replicated Data Types — data structures (counters, sets, maps) designed to merge automatically and correctly. Implemented in Riak 2.0.
+- **Custom resolution logic**: application code resolves conflicts either on write (handler called immediately, like Bucardo for Postgres) or on read (all versions stored, returned to application on next read, like CouchDB).
+
+> **Conflict resolution granularity:** most multi-leader systems resolve conflicts at the level of individual rows or documents, not entire transactions. A transaction with multiple writes may have each write resolved independently.
+
+### Multi-Leader Replication Topologies
+
+How write events propagate between leaders matters. Three common topologies:
+
+| Topology | Shape | Pros | Cons |
+|----------|-------|------|------|
+| **Circular** | Each node forwards writes to one other node (A to B to C to A) | Simple | **Single point of failure** — if one node goes down, the replication chain breaks for all downstream nodes |
+| **Star** | One central root node forwards writes to all others | Simple routing | **Central node is a single point of failure**; topology could be reconfigured manually, but that takes time |
+| **All-to-all** | Every leader sends writes to every other leader | No single point of failure | Messages may arrive **out of order**, causing causality violations |
+
+#### All-to-All Causality Problem
+
+The all-to-all topology is the most fault-tolerant, but has a subtle problem: some replication messages may "overtake" others. For example, leader A inserts a row, then leader B updates it. If leader C receives B's update *before* A's insert, it tries to apply an update to a row that doesn't exist yet. This is a **causality violation**.
+
+Simply attaching timestamps to writes is not sufficient, because clocks cannot be trusted to be sufficiently in sync. **Version vectors** can ensure correct causal ordering, but many multi-leader implementations handle this poorly in practice (e.g., PostgreSQL BDR does not provide causal ordering; Tungsten Replicator for MySQL doesn't even try to detect conflicts).
 
 ### Leaderless Replication
 
 Any replica accepts writes. Associated with Dynamo-style databases (Riak, Cassandra, Voldemort).
 
+In some implementations, the client sends writes directly to several replicas in parallel. In others, a coordinator node does it on behalf of the client — but unlike a leader, this coordinator does not enforce ordering.
+
 **Quorum reads/writes**: with n replicas, write must succeed on w, read must query r, where `w + r > n`.
 - Typical: n=3, w=2, r=2
 - This guarantees at least one node you read from has the latest write
+- Reads and writes are always sent to **all n replicas** in parallel; w and r just determine how many must respond before the operation is considered successful
 
-**Sloppy quorums**: during network partition, accept writes even if can't reach w home replicas — write to any w available nodes. Better availability, weaker durability guarantee.
+**How do replicas catch up after an outage?** Two mechanisms:
 
-**Version vectors**: track which value is newer when concurrent writes exist. Each replica maintains a counter per replica.
+**Read repair**: when a client reads from multiple replicas in parallel and detects a stale response (e.g., version 6 from one replica, version 7 from another), it writes the newer value back to the stale replica. Works well for frequently read values, but values that are rarely read may remain stale indefinitely.
+
+**Anti-entropy process**: a background process that constantly compares data between replicas and copies missing data. Unlike leader-based replication logs, it doesn't copy writes in any particular order, and there may be significant delay. Not all systems implement this — Voldemort, for example, does not have an anti-entropy process, relying solely on read repair.
+
+#### Sloppy Quorums and Hinted Handoff
+
+During a network partition, a client may not be able to reach the w "home" nodes for a particular value. The database faces a choice:
+
+1. Return errors for all requests that can't reach a quorum of home nodes
+2. Accept writes on **any w reachable nodes**, even if they aren't the usual homes for that data
+
+Option 2 is a **sloppy quorum** — like knocking on your neighbor's door when you're locked out and asking to stay on their couch.
+
+Once the network partition heals, any writes that a node temporarily accepted on behalf of another node are sent to the correct "home" nodes. This is called **hinted handoff** (your neighbor politely asks you to go home once you find your keys).
+
+> **Key implication:** sloppy quorums mean that even when `w + r > n`, you cannot be sure to read the latest value, because the latest write may be sitting on nodes outside the usual n. Sloppy quorums + hinted handoff optimize for **write availability** at the cost of potential staleness. This is why Dynamo-style databases are generally optimized for use cases that can tolerate eventual consistency.
+
+| Database | Sloppy quorums |
+|----------|---------------|
+| Riak | Enabled by default |
+| Cassandra | Disabled by default |
+| Voldemort | Disabled by default |
+
+### Detecting Concurrent Writes
+
+In leaderless systems, concurrent writes to the same key must be handled correctly. But what does "concurrent" actually mean?
+
+#### The Happens-Before Relationship — Formal Definition
+
+> **An operation A happens before another operation B if B knows about A, or depends on A, or builds upon A in some way.** Two operations are concurrent if neither happens before the other (i.e., neither knows about the other).
+
+This definition is about **knowledge, not physical time**. Two operations might be concurrent even if one physically started milliseconds before the other — what matters is whether one could have known about the other. This connects to the intuition from special relativity: information cannot travel faster than the speed of light, so two events that occur some distance apart cannot possibly affect each other if the time between them is shorter than the light-travel time.
+
+In computer systems, network delays play the role of the speed of light: two operations can occur some time apart and still be concurrent because network problems prevented one from knowing about the other.
+
+There are three possibilities for any two operations A and B:
+1. A happened before B
+2. B happened before A
+3. A and B are concurrent (conflict that needs resolution)
+
+#### The Algorithm for Merging Concurrent Values (Single Replica)
+
+1. The server maintains a **version number** for each key, incremented on every write
+2. When a client **reads** a key, the server returns **all values that are not overwritten** (siblings), along with the latest version number
+3. When a client **writes**, it must include the version number from its prior read, and **merge together all values** it received in that read
+4. When the server **receives a write** with a version number, it can **overwrite all values with that version or below** (since the client must have merged them), but **keeps values with higher version numbers** (concurrent writes the client didn't know about)
+
+```
+Client A reads key -> version 1, value [X]
+Client B reads key -> version 1, value [X]
+Client A writes (version: 1, value: [X, A]) -> server stores [X, A] at version 2
+Client B writes (version: 1, value: [X, B]) -> server stores [X, B] at version 3
+                                                but keeps [X, A] (version 2) too!
+Next read returns: version 3, values [[X, A], [X, B]]
+-> client must merge these "sibling" values on the next write
+```
+
+**Deletions require tombstones.** You can't just remove an item from the merged value, because the merge on the next write would resurrect it. Instead, mark the item as deleted with a **tombstone** marker, so the merge logic knows to keep it deleted.
+
+**Version vectors (multi-replica):**
+
+The single-replica algorithm uses one version number. With multiple replicas, you need a **version vector**: a collection of version numbers, **one per replica per key**. Each replica increments its own version counter when processing a write and tracks the version numbers it has seen from other replicas.
+
+Version vectors allow the database to distinguish between overwrites and concurrent writes across the entire set of replicas.
 
 ---
 
@@ -103,49 +280,146 @@ Any replica accepts writes. Associated with Dynamo-style databases (Riak, Cassan
 
 **Partitioning** (sharding) = splitting a large dataset across multiple nodes so each node holds a subset. Used when data is too large for one machine.
 
-Partitioning is usually combined with replication: each partition is stored on multiple nodes, but each node may store multiple partitions.
+### Partitioning and Replication Combined
+
+Partitioning is usually combined with replication: each partition is stored on multiple nodes for fault tolerance. A single node may store **multiple partitions**. If a leader-follower replication model is used:
+
+- Each partition's leader is assigned to one node, and its followers to other nodes
+- **A single node may be the leader for some partitions and a follower for others**
+- The choice of partitioning scheme is mostly independent of the choice of replication scheme
+
+```
+Node 1: Leader for Partition A, Follower for Partition B, Follower for Partition C
+Node 2: Follower for Partition A, Leader for Partition B, Follower for Partition C
+Node 3: Follower for Partition A, Follower for Partition B, Leader for Partition C
+```
+
+This means replication (Chapter 5) and partitioning are orthogonal concerns that compose together. Everything discussed in Chapter 5 about replication applies equally to replication of individual partitions.
 
 ### Partitioning Key-Value Data
 
-**By key range**: assign a contiguous range of keys to each partition (like a paper encyclopedia volume). Allows efficient range queries. Risk: hot spots if keys are accessed unevenly (e.g., timestamp keys → all writes go to "today's" partition).
+**By key range**: assign a contiguous range of keys to each partition (like a paper encyclopedia volume). Allows efficient range queries. Within each partition, keys can be kept in sorted order for fast range scans.
 
-**By hash of key**: hash the key, assign hash ranges to partitions. Distributes load evenly. Destroys ability to do range queries efficiently.
+Risk: hot spots if keys are accessed unevenly. If the key is a timestamp, all writes go to "today's" partition. Fix: prefix the key with something that distributes writes (e.g., sensor name + timestamp), at the cost of needing separate range queries per prefix.
 
-Cassandra uses a compromise: compound primary key, first part hashed (for partitioning), rest sorted within partition (for range queries).
+**By hash of key**: hash the key, assign hash ranges to partitions. Distributes load evenly. The hash function need not be cryptographic — Cassandra and MongoDB use MD5, Voldemort uses Fowler-Noll-Vo. Destroys ability to do range queries efficiently — keys that were adjacent are now scattered across partitions.
 
-### Avoiding Hot Spots
+#### Cassandra's Compound Primary Key
 
-If one key is very popular (celebrity post), all traffic goes to one partition. Solutions:
-- Add random salt to key (spread writes, but reads must query all salted copies)
-- Use application logic to handle this specially
+Cassandra uses a compromise approach with compound primary keys:
+
+- The **first part** of the primary key is hashed to determine the partition assignment
+- The **remaining columns** are used as a concatenated index for **sorting data within the partition** (stored in SSTables)
+
+This enables an elegant data model: a query cannot search for a range of values within the first column, but if it specifies a **fixed value** for the first column, it can perform an **efficient range scan** over the other columns.
+
+```
+-- Example: social media updates
+-- Primary key: (user_id, update_timestamp)
+-- user_id is hashed -> determines partition
+-- update_timestamp is sorted within partition
+
+-- Efficiently retrieves all updates by a specific user in a time range:
+SELECT * FROM updates
+  WHERE user_id = 'alice'
+  AND update_timestamp >= '2026-01-01'
+  AND update_timestamp < '2026-02-01';
+```
+
+Different users are distributed across different partitions, but within each user, updates are stored ordered by timestamp on a single partition.
+
+### A Note on "Consistent Hashing"
+
+The term "consistent hashing" has become confusingly overloaded. Kleppmann makes an important clarification:
+
+- The **original concept** (Karger et al.) is a specific algorithm for a ring-based hash space designed for internet-wide caching (CDNs), where adding/removing a node only moves keys near the affected position on the ring
+- This particular approach **doesn't work very well for databases** and is **rarely used in practice**
+- What **most databases actually use** is simpler: hash the key, then use **fixed partition boundaries** or randomly assigned partition ranges — not a ring-based approach at all
+- Many systems say they use "consistent hashing" but really mean **hash partitioning** with some strategy for minimizing data movement during rebalancing
+
+> **Takeaway:** when someone says "consistent hashing," ask what they actually mean. The term is used so loosely that it could refer to very different mechanisms. Kleppmann recommends just calling it "hash partitioning" to avoid confusion.
+
+### Skewed Workloads and Relieving Hot Spots
+
+Hashing distributes data evenly, but can't prevent hot spots when all reads/writes target a single key. Example: a celebrity with millions of followers posts something — all writes for comments/likes go to the partition owning that key.
+
+**Workaround: key salting.** Add a random two-digit number to the beginning or end of the hot key. This spreads writes across 100 different keys (which may live on different partitions).
+
+```
+-- Instead of writing to key "celebrity_post_123":
+-- Write to "celebrity_post_123_42" (where 42 is random 0-99)
+-- Spreads writes across up to 100 partitions
+```
+
+**Trade-off:** reads now must query all 100 salted keys and combine results. You also need bookkeeping to track which keys are salted — applying this to every key would add unnecessary overhead.
+
+> Most databases today cannot automatically detect and compensate for skewed workloads. This remains an application-level concern.
 
 ### Secondary Indexes and Partitioning
 
 Secondary indexes don't map neatly to partitions:
 
-**Document-partitioned index (local index)**: each partition maintains its own secondary index for data it holds. Simple to write. Reading requires **scatter/gather** — query all partitions and merge results. Used by MongoDB, Riak, Elasticsearch.
+#### Document-Partitioned Index (Local Index)
 
-**Term-partitioned index (global index)**: the index itself is partitioned by indexed term. Reads efficient (query specific index partition). Writes slow (must update index partitions on multiple nodes). Used by DynamoDB.
+Each partition maintains its own secondary index for data it holds. Simple to write. Reading requires **scatter/gather** — query all partitions and merge results.
+
+For example, if you partition a used-car database by document ID, and you want to find all red cars, you need to query *every* partition's local index for `color:red` and combine the results. This is what **Elasticsearch** does internally — a search query fans out to all shards, each shard runs the query on its local index, and results are merged. Scatter/gather can be expensive with many partitions and is prone to tail latency amplification.
+
+Used by: MongoDB, Riak, Cassandra, Elasticsearch, SolrCloud, VoltDB.
+
+#### Term-Partitioned Index (Global Index)
+
+The index itself is partitioned by indexed term. Reads efficient (query specific index partition). Writes slow (must update index partitions on multiple nodes).
+
+For example, colors starting with letters a-r on partition 0, s-z on partition 1. A lookup for `color:red` only needs to query partition 0. But writing a new red car requires updating the data partition *and* the index partition for "red" — which may be on different nodes.
+
+**DynamoDB's global secondary indexes** are term-partitioned. Amazon states they are updated within a fraction of a second normally, but may experience longer propagation delays during infrastructure faults.
+
+| Approach | Read pattern | Write pattern | Latency trade-off | Real-world example |
+|----------|-------------|---------------|-------------------|-------------------|
+| Document-partitioned (local) | Scatter/gather across all partitions | Single partition write | Reads expensive, writes cheap | Elasticsearch scatter/gather |
+| Term-partitioned (global) | Query one index partition | Must update multiple partitions | Reads cheap, writes expensive | DynamoDB global secondary indexes |
 
 ### Rebalancing Partitions
 
-When nodes are added or removed, partitions must move.
+When nodes are added or removed, partitions must move. Requirements for any rebalancing strategy:
+- Load should be shared fairly after rebalancing
+- Database should continue serving reads and writes during rebalancing
+- Minimize data movement to reduce network and disk I/O
 
-**Bad approach: hash mod N** — when N changes, almost every key moves. Too expensive.
+**Bad approach: hash mod N** — when N changes, almost every key moves. Example: `hash(key) = 123456`. With 10 nodes, goes to node 6 (`123456 mod 10`). With 11 nodes, moves to node 3 (`123456 mod 11`). With 12 nodes, moves to node 0. Far too much data movement.
 
-**Fixed number of partitions**: create many more partitions than nodes (e.g., 1000 partitions for 10 nodes). When a node is added, steal a few partitions from each existing node. Partition count stays the same. Used by Riak, Elasticsearch, Couchbase.
+**Fixed number of partitions**: create many more partitions than nodes (e.g., 1000 partitions for 10 nodes). When a node is added, steal a few partitions from each existing node. Partition count stays the same. Only entire partitions move — no splitting needed. Used by Riak, Elasticsearch, Couchbase, Voldemort. Downside: choosing the right partition count upfront is hard. Too few means each partition grows too large; too many means excessive overhead.
 
-**Dynamic partitioning**: partitions split when they grow too large, merge when they shrink. Partition count adapts to data volume. Used by HBase, MongoDB.
+**Dynamic partitioning**: partitions split when they grow too large (HBase default: 10 GB), merge when they shrink. Partition count adapts to data volume. Used by HBase, RethinkDB, MongoDB. Caveat: an empty database starts with a single partition (all writes go to one node). HBase and MongoDB support **pre-splitting** to mitigate this.
 
-**Consistent hashing**: place nodes and keys on a virtual ring. Each key belongs to the nearest node clockwise. Adding/removing a node only affects adjacent keys.
+**Proportional to nodes**: fixed number of partitions per node (e.g., Cassandra uses 256 partitions per node by default). When a new node joins, it randomly splits existing partitions and takes half. Partition count grows with cluster size. Most closely matches the original definition of consistent hashing by Karger et al.
 
-### Request Routing
+### Request Routing (Service Discovery)
 
-When a client wants to read/write a key, how does it know which node to contact?
+When a client wants to read/write a key, how does it know which node to contact? This is an instance of the general **service discovery** problem. Three approaches:
 
-1. **Client-side routing**: client has the partition map, contacts the right node directly
-2. **Routing tier**: separate routing service (like ZooKeeper) directs requests
-3. **Gossip protocol**: all nodes know the partition map (Cassandra, Riak)
+1. **Any-node routing**: client contacts any node (e.g., via round-robin load balancer). If that node owns the partition, it handles the request directly; otherwise, it forwards to the correct node and relays the response.
+2. **Routing tier**: a dedicated partition-aware load balancer (not the database nodes themselves) determines which node should handle each request and forwards accordingly. The routing tier does not handle queries — it only routes.
+3. **Client-side routing**: the client is aware of the partition-to-node mapping and connects directly to the appropriate node, with no intermediary.
+
+The key challenge: how does the routing component (whether it's a node, routing tier, or client) learn about changes in partition assignment?
+
+#### Request Routing in Practice
+
+Most distributed databases rely on a **separate coordination service** to manage partition-to-node mappings:
+
+| System | Routing approach | Details |
+|--------|-----------------|---------|
+| **HBase** | ZooKeeper | Region servers register with ZooKeeper; clients look up region locations |
+| **SolrCloud** | ZooKeeper | Tracks which node holds which shard and which is the leader |
+| **Kafka** | ZooKeeper / KRaft | Historically ZooKeeper; newer versions use built-in KRaft consensus |
+| **Cassandra** | Gossip protocol | Every node knows the full token ring; any node can forward requests |
+| **Riak** | Gossip protocol | Any node can serve as coordinator for any request |
+| **MongoDB** | Custom config servers | `mongos` routers query config servers to learn shard ownership |
+| **LinkedIn Espresso** | Helix (on ZooKeeper) | Uses Helix for cluster management, implementing a routing tier |
+
+> **Pattern:** ZooKeeper-based systems subscribe to partition changes and get notified when the mapping changes. Gossip-based systems spread information peer-to-peer, avoiding the ZooKeeper dependency but potentially slower to converge.
 
 ---
 
@@ -153,7 +427,13 @@ When a client wants to read/write a key, how does it know which node to contact?
 
 **Transaction** = a group of reads and writes treated as one logical unit. Either all succeed (commit) or all fail (abort/rollback).
 
-Transactions simplify error handling — you don't need to worry about partial failures.
+Transactions simplify error handling — you don't need to worry about partial failures. If a transaction aborts, the application can safely retry, knowing that nothing was changed.
+
+**Error handling and retries** — caveats when retrying aborted transactions:
+- If the transaction succeeded but the network failed during acknowledgment, retrying causes **duplicate execution** (unless you have application-level deduplication)
+- If the error is due to overload, retrying makes it **worse** (use exponential backoff)
+- Only retry **transient** errors (deadlocks, network interruptions); permanent errors (constraint violations) will fail again
+- If the transaction has **side effects outside the database** (sending an email), those side effects may happen even if the transaction is aborted
 
 ### ACID
 
@@ -166,23 +446,88 @@ The gold standard of transaction guarantees:
 | I | **Isolation** | Concurrently executing transactions don't interfere with each other |
 | D | **Durability** | Once committed, data won't be lost even if the system crashes |
 
-> **Important:** "Consistency" in ACID is different from "consistency" in distributed systems (CAP theorem). The ACID C is the odd one out — it's about application invariants, not a database feature.
+> **Important:** "Consistency" in ACID is different from "consistency" in distributed systems (CAP theorem). The ACID C is the odd one out — it's about application invariants, not a database feature. Joe Hellerstein remarked that the C was "tossed in to make the acronym work."
+
+### Single-Object vs Multi-Object Operations
+
+Before diving into isolation, it's worth distinguishing between single-object and multi-object guarantees.
+
+#### Single-Object Atomicity Mechanisms
+
+**Single-object writes** can still go wrong. Consider writing a 20 KB JSON document to a database:
+- What if the network drops halfway through, and only the first 10 KB is written?
+- What if the power fails while overwriting the previous value on disk — old and new values spliced together?
+- What if another client reads the document while it's being overwritten?
+
+Storage engines provide single-object guarantees through specific mechanisms:
+
+| Mechanism | Purpose |
+|-----------|---------|
+| **Write-ahead log (WAL)** | Crash recovery — if a write didn't complete, roll it back on recovery. Ensures the 20 KB JSON doc is either fully written or not at all |
+| **Lock on object** | Isolation — only one thread can access the object at a time during a write |
+| **Compare-and-set** | Concurrent update safety — write only succeeds if current value matches expected value |
+| **Atomic increment** | Counter safety — `UPDATE SET value = value + 1` without read-modify-write cycle |
+
+> **These are NOT transactions.** They apply to a single object only. Compare-and-set and atomic increments have been marketed as "lightweight transactions" or even "ACID," but that terminology is misleading. A transaction groups multiple operations on multiple objects into one unit.
+
+#### When Multi-Object Transactions Are Needed
+
+Many distributed datastores abandoned multi-object transactions because they are hard to implement across partitions. But applications often need them:
+
+| Scenario | Why multi-object transactions matter |
+|----------|--------------------------------------|
+| **Foreign key references** | Inserting a row that references another table — both must be valid. If inserting several records that refer to one another, the foreign keys must be correct and up to date, or the data becomes nonsensical |
+| **Denormalized data** | Document databases encourage denormalization due to lack of joins. When denormalized data must be updated (e.g., unread email counter + mailbox), all copies must change together or they go out of sync |
+| **Secondary indexes** | Every write to a table with secondary indexes must update the index entries too. Without transaction isolation, a record could appear in one index but not another because the second index update hasn't happened yet |
+
+> **Key insight:** abandoning multi-object transactions doesn't mean applications don't need them — it means the application is forced to handle partial failures itself, with much more complex error handling.
 
 ### Isolation Levels
 
 Transactions running concurrently can interfere in several ways. Isolation levels define how much interference is allowed:
 
-**Read uncommitted** — can read uncommitted data from other transactions (dirty reads). Barely any protection.
+| Level | Prevents | Does NOT prevent | Default in |
+|-------|----------|-----------------|------------|
+| **Read uncommitted** | Dirty writes | Dirty reads, anything else | Rarely used |
+| **Read committed** | Dirty reads, dirty writes | Read skew, lost updates, write skew | PostgreSQL, Oracle, SQL Server |
+| **Snapshot isolation** | Dirty reads, dirty writes, read skew | Lost updates (in some DBs), write skew, phantoms | PostgreSQL (as "repeatable read"), MySQL InnoDB |
+| **Serializable** | All race conditions | Nothing — strongest level | Must be explicitly requested |
 
-**Read committed** — only read committed data (no dirty reads). Most common default (PostgreSQL, Oracle, SQL Server).
-- Prevents dirty reads: only see data after it's committed
-- Prevents dirty writes: only overwrite data that has been committed
+> **Naming confusion:** the SQL standard doesn't define snapshot isolation (it predates the concept). PostgreSQL and MySQL call it "repeatable read." Oracle calls it "serializable" even though it's actually snapshot isolation, not true serializability. IBM DB2 uses "repeatable read" to mean serializability. As Kleppmann puts it: "nobody really knows what repeatable read means."
 
-**Snapshot isolation (repeatable read)** — each transaction sees a consistent snapshot of the database at the time it started. Most common for long-running reads. Uses MVCC (Multi-Version Concurrency Control).
-- Prevents non-repeatable reads
-- Different transactions see different "versions" of the same rows
+#### How Read Committed Is Implemented
 
-**Serializable** — strongest isolation. Transactions execute as if they were serial (one at a time), even though they may actually run concurrently.
+Most databases implement read committed using two techniques:
+
+**Preventing dirty writes:** row-level locks. When a transaction wants to modify an object, it acquires a lock and holds it until commit or abort. Only one transaction can hold the lock at a time; other writers must wait.
+
+**Preventing dirty reads:** the database remembers **both the old committed value and the new uncommitted value**. While the writing transaction is ongoing, any other transactions that read the object are given the **old value**. Only when the new value is committed do reads switch over to the new value.
+
+> **Why not use read locks?** An alternative would be to require read transactions to briefly acquire the same lock as writers. But one long-running write transaction would force many read-only transactions to wait, causing a slowdown in one part of the application to ripple across unrelated parts. Most databases avoid read locks for this reason (exceptions: IBM DB2 and SQL Server with `read_committed_snapshot=off`).
+
+#### MVCC (Multi-Version Concurrency Control) — In Detail
+
+Snapshot isolation is implemented using MVCC. Here is how it works in PostgreSQL (other implementations are similar):
+
+1. Each transaction is given a unique, **always-increasing transaction ID** (txid)
+2. Whenever a transaction writes, the data is **tagged with the writer's txid**
+3. Each row has a `created_by` field (txid that inserted it) and a `deleted_by` field (txid that deleted it; empty if not deleted)
+4. An UPDATE is internally translated into a DELETE + INSERT (mark old row deleted, create new row)
+
+**Visibility rules — at the start of each transaction, the database:**
+
+1. **Lists all in-progress transactions** (not yet committed or aborted)
+2. Ignores writes by those in-progress transactions, even if they subsequently commit
+3. Ignores writes by aborted transactions
+4. Ignores writes by transactions with a **higher txid** (started after this transaction)
+5. All other writes are visible
+
+> **Put simply:** an object is visible if (a) the transaction that created it had already committed when the reader started, and (b) the object is not marked for deletion by a committed transaction that started before the reader.
+
+**Indexes in MVCC:** indexes must accommodate multiple versions. Two approaches:
+
+1. **Point to all versions**: the index points to all versions of an object. An index query must filter out versions not visible to the current transaction at query time. When garbage collection removes old versions, corresponding index entries are also removed. PostgreSQL optimizes this by allowing different versions of the same object to fit on the same page.
+2. **Append-only B-trees**: used by CouchDB, Datomic, LMDB. Instead of overwriting pages, create a new copy of each modified page. Parent pages are copied and updated to point to new child pages. Each write transaction creates a new B-tree root that is a consistent snapshot. No need to filter by transaction ID — subsequent writes can't modify existing trees.
 
 ### Race Conditions
 
@@ -196,38 +541,216 @@ Even with good isolation, several race conditions can occur:
 
 **Lost update**: two transactions read a value, modify it, and write it back — one write silently overwrites the other.
 ```
-Transaction A: balance = read(account) → 500
-Transaction B: balance = read(account) → 500
-Transaction A: write(account, 500 + 100) → 600
-Transaction B: write(account, 500 + 200) → 700  ← A's write is lost!
+Transaction A: balance = read(account) -> 500
+Transaction B: balance = read(account) -> 500
+Transaction A: write(account, 500 + 100) -> 600
+Transaction B: write(account, 500 + 200) -> 700  <- A's write is lost!
 ```
-Fixes: atomic operations (`UPDATE counter SET value = value + 1`), compare-and-set, explicit locking.
 
-**Write skew**: two transactions read overlapping data, make decisions based on it, then write to *different* objects — leading to an invariant violation.
+#### Preventing Lost Updates — Full Solution Set
 
-Example: hospital on-call system requires at least one doctor on call. Two doctors simultaneously check (both see 2 on call), decide it's safe to go off call, and both do. Now zero doctors on call.
+| Solution | How it works | Supported by |
+|----------|-------------|-------------|
+| **Atomic operations** | `UPDATE counters SET value = value + 1` — database handles concurrency internally via exclusive lock or single thread | Most relational DBs, MongoDB, Redis |
+| **Explicit locking** | `SELECT ... FOR UPDATE` — application locks rows before read-modify-write cycle | All relational DBs |
+| **Automatic detection** | Database detects lost updates under snapshot isolation, aborts offending transaction | PostgreSQL repeatable read, Oracle serializable, SQL Server snapshot isolation. **Not** MySQL/InnoDB repeatable read |
+| **Compare-and-set** | `UPDATE ... WHERE value = old_value` — write only if value hasn't changed | Databases without transactions; must verify it reads from current value, not old snapshot |
+
+#### Write Skew
+
+Two transactions read overlapping data, make decisions based on it, then write to *different* objects — leading to an invariant violation.
+
+**Hospital on-call example:** two doctors simultaneously check (both see 2 on call), decide it's safe to go off call, and both do. Now zero doctors on call.
 
 Write skew is tricky because the transactions don't update the *same* object, but they each based their decision on shared state. Requires true serializable isolation to prevent.
 
-**Phantoms**: a transaction reads rows matching some condition; another transaction inserts rows matching that condition; the first transaction re-reads and gets different results. Write skew involving inserts.
+**More examples of write skew:**
+
+| Scenario | What goes wrong |
+|----------|----------------|
+| **Meeting room booking** | Two users concurrently book the same room for the same time — each checks for conflicts, finds none, inserts booking. Snapshot isolation doesn't prevent the double-booking |
+| **Username registration** | Two users try to claim the same username simultaneously — each checks availability, finds it free, creates account. (A unique constraint can fix this particular case) |
+| **Multiplayer game** | Two players simultaneously move different pieces to the same board position — each checks the position is empty, then moves. Depending on the game rules, this may violate constraints |
+| **Double-spending** | Two spending transactions each check the balance is sufficient, then debit. Together they overdraw the account, but neither notices the other |
+
+#### Phantoms Causing Write Skew
+
+All write skew examples follow a common pattern:
+
+1. A `SELECT` query checks whether some requirement is satisfied (at least two doctors on call, no existing booking for that room, position on the board is empty, username is available, balance is sufficient)
+2. Based on the result, the application decides to proceed
+3. The application makes a write (`INSERT`, `UPDATE`, or `DELETE`) that **changes the precondition** checked in step 1
+4. If step 1 were repeated after the write, it would return a different result
+
+When the write in step 3 **adds new rows** that match the search condition in step 1, this is called a **phantom**. Snapshot isolation prevents phantom reads in read-only queries, but in read-write transactions, phantoms can lead to write skew.
+
+Phantoms are especially insidious because you can't lock rows that don't yet exist. If the write skew depends on the *absence* of rows (e.g., no booking exists for this room at this time), `SELECT FOR UPDATE` can't attach locks to anything.
+
+#### Predicate Locks
+
+The conceptually correct solution to phantoms: a lock on **all objects matching a search condition**, including objects that don't yet exist.
+
+```sql
+-- A predicate lock on this query would lock all bookings
+-- matching room 123 and the noon-1pm time range,
+-- including bookings that haven't been inserted yet
+SELECT * FROM bookings
+  WHERE room_id = 123
+  AND end_time > '2026-01-01 12:00'
+  AND start_time < '2026-01-01 13:00';
+```
+
+If transaction A holds a predicate lock and transaction B tries to insert, update, or delete an object matching the predicate, B must wait for A to commit or abort.
+
+> **Performance problem:** checking whether active predicate locks match a new write is computationally expensive when there are many active locks.
+
+#### Index-Range Locks (Next-Key Locking)
+
+A practical approximation of predicate locks used by most databases with 2PL:
+
+Instead of locking the exact predicate, lock a **larger range** in an index:
+
+| Approximation | Example |
+|--------------|---------|
+| Lock all bookings for a specific room | Attach shared lock to index entry `room_id = 123` — blocks any insert/update for room 123, not just the noon-1pm range |
+| Lock all bookings for a specific time range | Attach shared lock to the time-range index for noon-1pm — blocks bookings for *any* room in that time range |
+| **Fallback: lock entire table** | If no suitable index exists, the database falls back to a shared lock on the entire table. Bad for performance, but safe |
+
+Index-range locks are less precise than predicate locks (they may lock more objects than strictly necessary), but they are **much cheaper** to check and still prevent phantoms and write skew.
+
+### Materializing Conflicts
+
+Phantoms are especially insidious because you can't lock rows that don't yet exist. If the write skew depends on the *absence* of rows (e.g., no booking exists for this room at this time), there is nothing to attach a lock to.
+
+**Materializing conflicts** is a technique to work around this: artificially create lock objects in the database.
+
+For example, in a meeting room booking system, create a table with **one row for every combination of room and 15-minute time slot**, for the next six months. Now, a transaction that wants to book a room can `SELECT ... FOR UPDATE` on the rows corresponding to the desired room and time range. If two transactions try to book the same slot, one will block on the other's lock.
+
+```sql
+-- Materialized lock table
+CREATE TABLE room_time_slots (
+  room_id   INT,
+  time_slot TIMESTAMP,
+  PRIMARY KEY (room_id, time_slot)
+);
+
+-- Transaction to book room 123 from 12:00 to 13:00:
+BEGIN;
+SELECT * FROM room_time_slots
+  WHERE room_id = 123
+    AND time_slot >= '2026-04-14 12:00'
+    AND time_slot < '2026-04-14 13:00'
+  FOR UPDATE;
+
+-- If no conflicting booking exists, insert the booking
+INSERT INTO bookings (room_id, start_time, end_time, booked_by)
+  VALUES (123, '2026-04-14 12:00', '2026-04-14 13:00', 'Alice');
+COMMIT;
+```
+
+> **Downside:** materializing conflicts is a last resort. It leaks concurrency control details into the data model, making the schema ugly and error-prone. A serializable isolation level handles this automatically.
 
 ### Serializability
 
 The only isolation level that prevents ALL race conditions. Three implementation approaches:
 
-**Actual serial execution**: literally execute one transaction at a time on one CPU core. Simple! Only works if transactions are fast and the dataset fits in memory. Used by VoltDB, Redis (single-threaded), Datomic.
+#### 1. Actual Serial Execution
 
-**Two-Phase Locking (2PL)**: readers and writers block each other.
-- Shared lock for reads
-- Exclusive lock for writes
-- Lock escalation from shared to exclusive requires other readers to release
+Literally execute one transaction at a time on one CPU core. Simple! Only works if transactions are fast and the dataset fits in memory. Used by VoltDB, Redis (single-threaded), Datomic.
 
-2PL has been the standard approach for decades. Performance is poor due to lock contention and deadlocks.
+Two developments made this viable around 2007:
+1. **RAM became cheap enough** to keep the entire active dataset in memory — transactions execute much faster without disk I/O waits
+2. **OLTP transactions are usually short** — making only a small number of reads and writes. Long-running analytics can run on a consistent snapshot (via snapshot isolation) outside the serial loop.
 
-**Serializable Snapshot Isolation (SSI)**: optimistic approach — allow all transactions to proceed, check for conflicts at commit time. If a conflict is detected, abort and retry.
+To avoid wasting the single thread on network round-trips, systems require transactions to be submitted as **stored procedures** — the entire transaction code is sent to the database ahead of time, so it can execute without waiting for client interaction.
+
+Key constraints:
+- Every transaction must be small and fast (submitted as a stored procedure, not interactive)
+- Active dataset must fit in memory
+- Write throughput limited to a single CPU core
+- Cross-partition transactions possible but orders of magnitude slower (VoltDB reports ~1,000 cross-partition writes/sec vs. much higher single-partition throughput)
+- Stored procedures must be **deterministic** (VoltDB requires this for replication — it replays the same procedure on each replica)
+
+#### 2. Two-Phase Locking (2PL)
+
+> **2PL is not 2PC.** Two-phase locking (2PL) sounds similar to two-phase commit (2PC), but they are completely different concepts. 2PC is discussed in Chapter 9.
+
+Readers and writers block each other (unlike snapshot isolation where readers never block writers):
+
+- If transaction A has **read** an object and B wants to **write** it, B must wait for A to finish
+- If transaction A has **written** an object and B wants to **read** it, B must wait for A to finish
+- Multiple transactions can hold **shared locks** for reading simultaneously
+- A **write** requires an **exclusive lock** — no other transaction may hold any lock on that object
+- A transaction may **upgrade** a shared lock to exclusive (same rules as acquiring exclusive directly)
+- All locks held until transaction commits or aborts (this is the "two-phase" part: acquire locks during execution, release all at commit)
+
+2PL is used by MySQL (InnoDB) and SQL Server for serializable isolation, and DB2 for repeatable read. It has been the standard approach for decades.
+
+**Performance problems:**
+- Lock contention: if several transactions want the same object, they form a queue
+- Deadlocks: transaction A waits for B's lock, B waits for A's lock. Database detects and aborts one, requiring retry
+- Unstable latencies: one slow transaction or one that acquires many locks can stall the entire system
+- At high percentiles, response times can be very bad under contention
+
+2PL can also use **predicate locks** to prevent phantoms — locking not just existing rows but all rows *matching a condition* (including future inserts). In practice, predicate locks are expensive, so most databases use **index-range locks** (next-key locking) as an approximation: lock a range of the index rather than specific predicate matches.
+
+#### 3. Serializable Snapshot Isolation (SSI)
+
+First described in 2008 (Michael Cahill's PhD thesis), SSI is relatively new compared to 2PL (which dates to the 1970s).
+
+**Key idea:** optimistic concurrency control on top of snapshot isolation. Allow all transactions to proceed without blocking, and check for serialization conflicts at commit time. If a conflict is detected, abort and retry.
+
 - Better performance than 2PL under low contention
-- Works with snapshots (like MVCC)
+- Works with snapshots (like MVCC) — readers never block writers, writers never block readers
 - Used by PostgreSQL 9.1+, FoundationDB
+
+**Pessimistic vs optimistic:**
+- **2PL is pessimistic**: if anything might go wrong (lock held by another), wait until it's safe
+- **Serial execution is extremely pessimistic**: equivalent to an exclusive lock on the entire database
+- **SSI is optimistic**: proceed with the transaction, hope for the best, check at commit time. Performs badly under high contention (many aborts), but well when conflicts are rare
+
+#### How SSI Detects Conflicts
+
+SSI detects two specific situations that indicate a transaction may have acted on a stale premise:
+
+**1. Detecting reads of a stale MVCC object version (uncommitted write existed before the read)**
+
+When transaction A reads an object, another transaction B may have already written to that object but not yet committed. A is reading from the snapshot, so it doesn't see B's write. The database tracks this: it notes that B has an uncommitted write to the same object A is reading.
+
+If B commits before A, then A's read was based on an outdated value. When A tries to commit, the database checks: "Were any of the writes that A ignored (due to MVCC visibility rules) now committed?" If yes, **abort A**.
+
+> **Why wait until commit?** If A is read-only, there's no risk of write skew — no need to abort. The database doesn't know at read time whether A will later write. Also, B may yet abort, making A's read not stale after all. By deferring the check, SSI avoids unnecessary aborts.
+
+**2. Detecting writes that affect prior reads (write happens after the read)**
+
+Transaction A reads some data. Then transaction B writes to data that A already read, and B commits. A's earlier read is now stale.
+
+The database uses **index entries** to track which transactions have read which data. When a transaction writes to the database, it checks the indexes for any other transactions that have recently read the affected data. Rather than blocking (like 2PL), it acts as a **tripwire**: it notifies those transactions that their prior reads may be outdated.
+
+When A tries to commit, the database checks: "Has any data that A read been modified by a committed transaction since A's read?" If yes, **abort A**.
+
+```
+Transaction A: reads rows where on_call = true -> sees [Dr. X, Dr. Y]
+Transaction B: reads rows where on_call = true -> sees [Dr. X, Dr. Y]
+Transaction B: sets Dr. Y on_call = false -> commits
+Transaction A: sets Dr. X on_call = false -> tries to commit
+-> SSI detects: the rows A read (on_call doctors) were modified
+  by B's committed write -> ABORT A
+```
+
+#### SSI Performance Characteristics
+
+| Characteristic | Detail |
+|---------------|--------|
+| **Read/write blocking** | None — readers never block writers, writers never block readers (like snapshot isolation) |
+| **Cost model** | Trades blocking for abort rate — must retry aborted transactions |
+| **Low contention** | Most transactions commit successfully, giving much better throughput than 2PL |
+| **High contention** | Abort rate increases, performance degrades — but gracefully, not catastrophically |
+| **Single-node** | Can be quite fast; PostgreSQL's implementation reduces unnecessary aborts using serializability theory |
+| **Distributed** | Requires additional protocol for cross-node conflict detection; FoundationDB distributes detection across machines for high throughput |
+| **Long transactions** | Read-write transactions should be short to avoid conflicts; long-running read-only queries are fine (they run on a consistent snapshot) |
+
+> **Key advantage of SSI over 2PL:** query latency is much more predictable and less variable. Read-only queries can run on a consistent snapshot without any locks, which is very appealing for read-heavy workloads. Compared to serial execution, SSI is not limited to a single CPU core — transactions can read and write data across multiple partitions while ensuring serializable isolation.
 
 ---
 
@@ -235,8 +758,26 @@ The only isolation level that prevents ALL race conditions. Three implementation
 
 | Chapter | Key Ideas |
 |---------|-----------|
-| 5 | Leader-based replication, replication lag problems, multi-leader conflicts, leaderless quorums |
-| 6 | Key-range vs hash partitioning, secondary indexes, rebalancing strategies |
-| 7 | ACID properties, isolation levels, race conditions, serializability approaches |
+| 5 | Leader-based replication, setting up followers via snapshot + log position, replication lag problems (read-after-write, monotonic reads, consistent prefix), failover pitfalls (GitHub incident, STONITH), chain replication, statement-based replication edge cases, multi-leader conflict detection (sync vs async), topologies (circular/star/all-to-all causality), leaderless quorums, sloppy quorums + hinted handoff, detecting concurrent writes with version vectors, happens-before as knowledge not time |
+| 6 | Key-range vs hash partitioning, Cassandra compound keys, "consistent hashing" misnomer, secondary indexes (local scatter/gather vs global term-partitioned), rebalancing strategies, request routing with ZooKeeper/gossip/config servers, LinkedIn Espresso + Helix |
+| 7 | ACID properties, single-object atomicity (WAL, compare-and-set) vs multi-object transactions, isolation levels, read committed implementation (old+new value, not read locks), MVCC visibility rules (txid, in-progress list), preventing lost updates (atomic ops, explicit locking, auto-detection, compare-and-set), write skew examples (hospital, room booking, usernames, multiplayer), phantoms, predicate locks vs index-range locks, serializability (serial execution, 2PL, SSI), SSI two detection mechanisms, SSI performance trade-offs |
 
-**Key insight for the week:** Distributing data gives you performance and availability gains, but introduces a whole new class of problems — inconsistency, conflicts, and race conditions. Every distributed system trades off between these guarantees.
+**Key insight for the week:** Distributing data gives you performance and availability gains, but introduces a whole new class of problems — inconsistency, conflicts, and race conditions. Every distributed system trades off between these guarantees. The solutions range from simple (single-leader with synchronous replication) to complex (SSI with optimistic conflict detection), each with distinct performance and correctness profiles.
+
+### Comparison Tables
+
+**Replication approaches at a glance:**
+
+| Approach | Write path | Conflict handling | Typical use case |
+|----------|-----------|-------------------|-----------------|
+| Single-leader | All writes to one node | No write conflicts (by definition) | Most relational databases |
+| Multi-leader | Each datacenter has a leader | Must detect and resolve conflicts | Multi-datacenter, offline clients |
+| Leaderless | Any node accepts writes | Quorum + version vectors + merge | High availability, Dynamo-style |
+
+**Serializability approaches at a glance:**
+
+| Approach | Concurrency | Blocking | Best for |
+|----------|-------------|----------|----------|
+| Serial execution | None (one at a time) | N/A | Small, fast transactions; dataset fits in memory |
+| Two-phase locking | Concurrent, but locks heavily | Readers block writers, writers block readers | Legacy systems; strong correctness needs |
+| SSI | Full concurrency (optimistic) | No blocking; abort at commit | Modern workloads with low-to-moderate contention |

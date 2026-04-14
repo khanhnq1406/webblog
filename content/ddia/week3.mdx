@@ -25,6 +25,34 @@ On a single machine: software either works or doesn't. If there's a hardware fau
 
 On a distributed system: the network can lose messages, duplicate them, or delay them arbitrarily. A node can fail, pause, or act strangely. You can't distinguish between a slow node and a dead one.
 
+### Cloud Computing vs Supercomputing
+
+There is a spectrum of philosophies on how to build large-scale computing systems — and your position on this spectrum determines how you handle faults.
+
+| Property | Supercomputing (HPC) | Cloud Computing |
+|----------|---------------------|-----------------|
+| **Fault handling** | Checkpoint state periodically; on failure, stop entire cluster and restart from last checkpoint | Must tolerate faults without stopping; service is always online |
+| **Hardware** | Specialized, high-reliability hardware; low failure rates per node | Commodity machines; higher failure rates, but cheaper at scale via economies of scale |
+| **Network** | Specialized topologies (multi-dimensional meshes, toruses); shared memory / RDMA | IP / Ethernet in Clos topologies; packet-switched, best-effort delivery |
+| **Failure assumption** | Failures are rare events that justify stopping the whole job | Something is always broken; the system must keep working anyway |
+| **Maintenance** | System is taken offline for repair | Rolling upgrades; kill and replace unhealthy VMs without downtime |
+| **Geography** | All nodes are close together in one facility | Geographically distributed; communication goes over the slow, unreliable internet |
+
+A supercomputer is more like a single-node computer than a distributed system: it deals with partial failure by escalating it into total failure — if any part fails, everything crashes (like a kernel panic). In a system with thousands of nodes, this strategy means spending a lot of time recovering from faults rather than doing useful work.
+
+Cloud services and internet-facing applications can't afford that. They need to serve users with low latency at any time. Making the service unavailable for repair is not acceptable. This is why distributed systems theory matters far more for cloud environments — we must accept partial failure and build fault-tolerance mechanisms into the software.
+
+> "If the system can tolerate failed nodes and still keep working as a whole, that is a very useful feature for operations and maintenance."
+
+### Building a Reliable System from Unreliable Components
+
+This might seem paradoxical, but it is an old idea in computing:
+
+- **Error-correcting codes** allow data to be transmitted accurately over a channel that occasionally corrupts bits.
+- **IP** is unreliable (drops, delays, duplicates, reorders packets). **TCP** provides reliable transport on top: retransmits missing packets, eliminates duplicates, reassembles order.
+
+The more reliable higher-level system is not perfect — TCP can't remove network delays — but it handles low-level faults so the remaining problems are easier to reason about. The same principle applies to distributed systems: consensus algorithms build reliable agreement on top of unreliable networks.
+
 ### Unreliable Networks
 
 The internet and most datacenter networks are **asynchronous packet networks**. When you send a request and wait for a response, the following can happen:
@@ -35,62 +63,236 @@ The internet and most datacenter networks are **asynchronous packet networks**. 
 - Remote node responded but response is delayed
 
 You cannot tell which of these happened! The only thing you can do is **timeout** — if no response within some time limit, declare it a failure. But timeouts are imprecise:
-- Too short: declare nodes dead when they're just slow (causing unnecessary failovers)
+- Too short: declare nodes dead when they're just slow (causing unnecessary failovers, cascading failures)
 - Too long: wait a long time before detecting real failures
 
 **Network partitions** — some nodes can communicate with each other but not with other groups — are particularly dangerous.
+
+#### Network Faults in Practice
+
+You might think network problems are rare, but they are surprisingly common — even in controlled environments:
+
+- One study found roughly **12 network faults per month** in a medium-sized datacenter. Of these, **half disconnected a single machine** and **half disconnected an entire rack**.
+- Adding redundant networking gear doesn't reduce faults as much as you'd hope — it doesn't guard against **human error** (e.g., misconfigured switches), which is a major cause of outages.
+- A **software upgrade to a switch** could trigger a network topology reconfiguration, during which **network packets were delayed for more than a minute**.
+- **Sharks bite undersea fiber-optic cables** and damage them. This sounds exotic, but it really does cause outages on trans-oceanic links.
+- A network interface can sometimes **drop all inbound packets but send outbound packets successfully** — just because a link works in one direction doesn't mean it works in the other.
+- A single misconfigured firewall rule can make an otherwise healthy machine completely unreachable.
+
+> Network faults are not exotic edge cases. They happen regularly, and your software needs to handle them. Anyone who has worked on a large-scale system has war stories about surprise partitions, half-dead switches, and "impossible" link failures.
+
+#### Detecting Faults in Practice
+
+How do you know a node is down? There are a few shortcuts, but none are universal:
+
+| Signal | What it tells you |
+|--------|-------------------|
+| TCP RST or FIN packet | The remote OS actively refused or closed the connection — the process is not listening |
+| Process crash notification | The process crashed, but the OS is still running and can notify you (e.g., HBase uses this via ZooKeeper) |
+| Management interface query | You can query a hardware management interface (e.g., IPMI) to check if a machine is powered on |
+| ICMP Destination Unreachable | A router believes the IP is unreachable — but routers are subject to the same limitations |
+| No response at all | You have **no idea** what happened — the node, the network, or both could be broken |
+
+When you get no response, you have no choice but to use a **timeout**. But how long should the timeout be?
+
+- If you know the network round-trip time is usually under 1ms, a timeout of 10 seconds seems generous. But a sudden GC pause or network congestion spike could cause a false positive.
+- Prematurely declaring a node dead is problematic: its responsibilities get transferred to other nodes, adding load. Under high load, this can cause **cascading failure** (all nodes declare each other dead).
+- Ideally, you'd measure the distribution of response times and set the timeout adaptively — for instance, using a **Phi Accrual failure detector** (used by Akka and Cassandra), which adjusts the timeout based on observed latency jitter.
+
+> There is no "perfect" failure detector that can reliably distinguish between a crashed node, a slow node, and a network partition. This is a fundamental limitation.
+
+#### Network Congestion and Queueing
+
+The variability of packet delays is most often due to **queueing** at multiple levels:
+
+1. **Switch queue overflow (tail drop)**: If several nodes simultaneously send packets to the same destination, the network switch must queue them. If the queue fills up, packets are dropped and must be resent — even though the network is functioning fine.
+2. **OS input queue**: When a packet reaches the destination machine, if all CPU cores are busy, the OS queues the incoming request until the application is ready. This can take an arbitrary length of time under load.
+3. **VM pausing (hypervisor scheduling)**: In virtualized environments, a running OS is often **paused for tens of milliseconds** while another VM uses a CPU core. The VM can't consume network data during this time, so incoming data is buffered by the virtual machine monitor.
+4. **TCP flow control (backpressure)**: TCP limits its own sending rate to avoid overloading the network link or receiver. This creates **sender-side queueing** before data even enters the network.
+
+All of these factors contribute to **unbounded delays**. Queueing delays have an especially wide range when a system is close to maximum capacity.
+
+#### TCP Timeout and UDP Trade-off
+
+**TCP** considers a packet lost if it is not acknowledged within a timeout, which is **calculated from observed round-trip times** and **adjusts dynamically**. Lost packets are automatically retransmitted. The application doesn't see the packet loss, but it does see the resulting delay (waiting for timeout + retransmission + acknowledgment).
+
+If a system has bounded network delay *d* and bounded processing time *r*, then every successful request receives a response within `2d + r`. If no response arrives within that window, you know something is broken. But **most real systems have neither guarantee**: asynchronous networks have unbounded delays, and servers cannot guarantee maximum processing time.
+
+**UDP** avoids flow control and does not retransmit lost packets. This means lower and more predictable latency — at the cost of reliability. UDP is used for **latency-sensitive applications** like VoIP and video conferencing, where delayed data is worthless. If a VoIP packet is lost, there isn't enough time to retransmit it before it needs to be played — the application fills in silence and moves on. The retry happens at the human layer instead: "Could you repeat that? The sound just cut out."
+
+> The trade-off: TCP gives you reliability at the cost of variable latency. UDP gives you predictable latency at the cost of dropped data. Choose based on whether your application can tolerate gaps.
+
+In public clouds and multi-tenant datacenters, resources are shared among many customers. Batch workloads like MapReduce can easily saturate network links. A **noisy neighbor** using lots of shared resources causes highly variable delays for everyone else. You can only choose timeouts experimentally: measure the distribution of round-trip times over an extended period and many machines, then determine an appropriate trade-off between detection delay and false positives.
+
+#### Synchronous vs Asynchronous Networks
+
+Why are datacenter networks so unpredictable? The answer lies in how they share bandwidth.
+
+**Telephone networks** use **circuit switching**: when you make a call, a fixed-bandwidth circuit is allocated end-to-end for the duration of the call. Bandwidth is *guaranteed* — no other call can take your capacity. This makes latency extremely predictable: you can guarantee a bounded round-trip time.
+
+**Datacenter networks** use **packet switching**: data is broken into packets that share the network links with traffic from other machines. No bandwidth is reserved for any particular flow. When the network is busy, packets queue up in switch buffers, adding unpredictable delay. If the buffers overflow, packets are dropped.
+
+Why not use circuit switching for datacenters? Because datacenter traffic is **bursty** — a node might send a burst of data for a few milliseconds, then nothing for seconds. Circuit switching would reserve bandwidth even during the idle periods, wasting capacity. Packet switching utilizes the network far more efficiently for bursty workloads.
+
+> The fundamental reason datacenter networks have unbounded delays is that they are optimized for *throughput* (bursty utilization), not *latency guarantees*. This is a deliberate engineering trade-off. Variable delays are not a law of nature, but simply the result of a cost/benefit trade-off.
+
+**Quality of Service (QoS)** and **admission control** can provide bounded delays in packet networks. But these approaches are not widely deployed in datacenter Ethernet and TCP/IP networks today.
 
 ### Unreliable Clocks
 
 Each machine has its own clock. Clocks are synchronized via NTP (Network Time Protocol), but this synchronization is imperfect.
 
-**Monotonic clocks**: only measure elapsed time (good for timeouts and performance measurements). Always move forward.
+**Monotonic clocks**: only measure elapsed time (good for timeouts and performance measurements). Always move forward. NTP may adjust the rate (slewing), but never causes jumps. Resolution is usually microseconds or better.
 
-**Time-of-day clocks**: tell you the current date/time. Can jump forward or backward (due to NTP sync, leap seconds, etc.). Unreliable for ordering events.
+**Time-of-day clocks**: tell you the current date/time. Can jump forward or backward (due to NTP sync, leap seconds, etc.). Unreliable for ordering events or measuring elapsed time.
 
-**The problem with timestamps for ordering**:
-- Node A writes at 12:00:01.000 (clock is 3ms fast)
-- Node B writes at 12:00:01.001 (clock is correct)
-- Node B's write appears to come after Node A's, but logically it came first
+#### Clock Readings Have a Confidence Interval
 
-Google's TrueTime API in Spanner handles this by providing a confidence interval: `[earliest, latest]`. The system waits for the uncertainty window to pass before committing, guaranteeing global ordering.
+You may read a machine's clock with microsecond or nanosecond resolution, but that doesn't mean the value is accurate to such precision. It doesn't make sense to think of a clock reading as a point in time — it is more like a **range of times within a confidence interval**. If we only know the time +/- 100ms, the microsecond digits in the timestamp are meaningless.
 
-**Consequences of unreliable clocks**:
-- Last-write-wins conflict resolution can silently drop data if clocks aren't perfectly synchronized
-- Can't use timestamps to determine which of two events happened first
-- Distributed locks with expiry can fail if the lock holder's clock runs slowly
+Most systems don't expose this uncertainty. When you call `clock_gettime()`, the return value doesn't tell you the expected error — you don't know if the confidence interval is 5 milliseconds or 5 years.
+
+#### Clock Drift and Synchronization Accuracy
+
+Clock synchronization is far less accurate than most people assume:
+
+| Source of error | Magnitude |
+|----------------|-----------|
+| **Quartz crystal drift** | Google assumes **200 ppm** (parts per million): 6ms drift per 30-second resync, or **17 seconds drift per day** |
+| **NTP over internet** | Minimum error of **35ms** achievable; occasional spikes around **1 second**. Large network delays can cause NTP client to give up entirely |
+| **NTP misconfiguration** | If a node is firewalled from NTP servers, the misconfiguration may go unnoticed for a long time. Clock error grows unboundedly |
+| **Leap seconds** | A minute becomes 59 or 61 seconds. Leap seconds have **crashed many large systems**. Workaround: NTP servers "smear" the adjustment gradually over a day |
+| **VM clock virtualization** | When a CPU core is shared between VMs, each VM is paused for tens of milliseconds. Clock appears to jump forward |
+
+**MiFID II regulation** (European financial regulation) requires all high-frequency trading funds to synchronize clocks to within **100 microseconds** of UTC. Achieving this requires GPS receivers, Precision Time Protocol (PTP), and careful deployment — significant effort and expertise.
+
+Google's **TrueTime API** in Spanner handles uncertainty explicitly: it returns a confidence interval `[earliest, latest]`. The system waits for the uncertainty window to pass before committing, guaranteeing global ordering. Google deploys GPS receivers or atomic clocks in each datacenter, keeping uncertainty to about 7ms.
+
+#### Timestamp Ordering Failure: A Concrete Example
+
+Consider a database with multi-leader replication using last-write-wins (LWW):
+
+```
+Node 1 clock: slightly fast (3ms ahead)
+Node 3 clock: correct
+
+1. Client A writes x=1 on Node 1, timestamped at 42.004
+2. The write is replicated to Node 3
+3. Client B reads x=1 on Node 3, then writes x=2, timestamped at 42.003
+4. Both writes are replicated to Node 2
+```
+
+Node 2 receives both writes. Using LWW, it compares timestamps: 42.004 > 42.003, so it concludes **x=1 is the more recent value**. It drops the write x=2.
+
+But x=2 was *causally later* — Client B read x=1 before writing x=2. The clock skew of just 3ms caused **silent data loss**. Client B's increment is permanently lost, with no error reported to the application.
+
+> LWW with physical timestamps can cause arbitrary amounts of data to be silently dropped. A node with a lagging clock cannot overwrite values written by a node with a fast clock until the clock skew has elapsed.
+
+#### Synchronized Clocks for Global Snapshots
+
+Snapshot isolation requires a monotonically increasing transaction ID. On a single node, a simple counter suffices. On a distributed system, generating a global monotonically increasing ID requires coordination and becomes a bottleneck.
+
+Spanner's insight: use synchronized time-of-day clocks as transaction IDs. If two confidence intervals don't overlap (A.latest &lt; B.earliest), then B definitely happened after A. To ensure this, Spanner **deliberately waits** for the length of the confidence interval before committing a read-write transaction. This keeps the wait time short (about 7ms) because Google deploys GPS receivers and atomic clocks in each datacenter.
 
 ### Process Pauses
 
 A process can be paused at any point and for any duration:
-- Garbage collection (GC) pause — the "stop the world" GC pause in JVM can last seconds
-- Virtual machine suspension and migration
-- OS context switching
-- Disk I/O
-- Sleeping (a laptop being closed)
+- **Garbage collection** (GC) — "stop the world" GC pauses in the JVM can last seconds, sometimes minutes
+- **Virtual machine suspension** and live migration — pauses of arbitrary length while saving/restoring memory
+- **OS context switching** — CPU time spent in other VMs is called "steal time"
+- **Synchronous disk I/O** — including unexpected class loading in Java
+- **Memory paging (swap)** — a simple memory access triggers disk I/O; under pressure, leads to thrashing
+- **SIGSTOP signal** — accidentally sent by an ops engineer, immediately stops the process
 
-After a pause, the process has no idea how much time has passed. This is why **distributed locks** are hard — the lock holder might pause for 10 seconds, and in that time, the lock expired and was claimed by another node. Both nodes now think they hold the lock.
+After a pause, the process has no idea how much time has passed. This is why **distributed locks** are hard — the lock holder might pause for 10 seconds, and in that time, the lock expired and was claimed by another node.
 
-**Fencing tokens**: when acquiring a lock, receive a monotonically increasing token. Every time you use the lock, include the token. The resource server rejects requests with older tokens. Even if a paused client resumes with a stale lock, it can't do damage.
+#### The HBase Locking Bug
+
+This is not a theoretical concern. HBase had exactly this bug in production:
+
+1. **Client 1** obtains a lease (lock) from the lock service to access a file in storage.
+2. **Client 1** enters a long GC pause — longer than the lease duration.
+3. The lease **expires** while Client 1 is paused.
+4. **Client 2** obtains the lease for the same file and begins writing to it.
+5. **Client 1** wakes up from GC. It still believes it holds a valid lease. It proceeds to write to the file.
+6. **Both clients write to the file simultaneously**, corrupting it.
+
+The problem: the lock/lease alone is not sufficient for safety. The client checking its own lease status is useless — it can't know whether it was paused.
+
+#### Fencing Tokens: The Solution
+
+**Fencing tokens**: when acquiring a lock, receive a monotonically increasing token. Every time you use the lock, include the token. The resource server rejects requests with older tokens.
+
+Here is the exact sequence:
+
+1. **Client A** acquires the lock from the lock service, receiving **token 33**.
+2. **Client A** enters a long GC pause (or any other process pause).
+3. While Client A is paused, the lock **expires** (its lease time runs out).
+4. **Client B** acquires the same lock and receives **token 34**.
+5. **Client B** writes to the storage service, including token 34. The storage server records that the highest token it has seen is 34.
+6. **Client A** wakes up from its pause. It still thinks it holds the lock. It tries to write to the storage service with token 33.
+7. The storage server **rejects** Client A's write because 33 &lt; 34.
+
+```
+Client A:  [acquire lock, token=33] ----> [GC pause...] ----> [resume, write with token=33] --> REJECTED
+Client B:                [lock expires] --> [acquire lock, token=34] --> [write with token=34] --> ACCEPTED
+Storage:                                                                 highest_seen = 34
+```
+
+> The fencing token turns the storage server into the final arbiter. Even if the lock service and the client disagree about who holds the lock, the storage server enforces a total ordering. The resource itself must participate in safety enforcement — relying on clients to check their own lock status is not sufficient.
+
+If ZooKeeper is used as the lock service, the transaction ID `zxid` or node version `cversion` can serve as the fencing token, since they are guaranteed to be monotonically increasing.
 
 ### Knowledge, Truth, and Lies
 
 In distributed systems, a node cannot trust its own judgment. It can only know what it has observed, not what the truth is.
 
-**Quorum-based decisions**: "the truth is defined by the majority." A node can only act on something if a quorum of nodes agrees. This prevents split-brain.
+**Quorum-based decisions**: "the truth is defined by the majority." A node can only act on something if a quorum of nodes agrees. This prevents split-brain. If a quorum declares a node dead, it must be considered dead — even if it still feels alive. The individual node must abide by the quorum decision and step down.
 
-**Byzantine faults**: what if nodes lie or send malicious/corrupted data? A Byzantine fault-tolerant system can still function even if some nodes act arbitrarily (not just crash or slow). Relevant in aerospace, blockchains, and systems with untrusted components. Most databases don't need this.
+#### Byzantine Faults
+
+What if nodes lie or send malicious/corrupted data? A **Byzantine fault-tolerant** system can function even if some nodes act arbitrarily. The name comes from the **Byzantine Generals Problem** (Lamport, Shostak, Pease, 1982).
+
+> The name "Byzantine" is derived from its meaning of "excessively complicated, bureaucratic, devious" — not from any historical evidence about the generals of Byzantium. Lamport wanted a nationality that would not offend any readers.
+
+**Key constraint**: Byzantine fault tolerance requires a **supermajority of more than two-thirds** of nodes to be functioning correctly. With 4 nodes, at most 1 may malfunction.
+
+**Where Byzantine fault tolerance matters:**
+- **Aerospace**: radiation can corrupt memory/CPU registers, leading to unpredictable responses. Flight control systems must tolerate this because failure is catastrophic.
+- **Peer-to-peer / blockchain**: participants may attempt to cheat. Bitcoin is essentially a way for mutually untrusting parties to agree on transactions without a central authority.
+
+**Where it doesn't matter**: in most datacenters, all nodes are controlled by your organization and radiation levels are low. The cost of deploying Byzantine fault-tolerant solutions makes them impractical for typical server-side systems.
+
+**Weak forms of lying** — worth guarding against even without full Byzantine tolerance:
+
+| Weak Byzantine fault | Defense |
+|---------------------|---------|
+| Corrupted network packets (hardware bugs, driver issues) | Application-level checksums — TCP/UDP checksums sometimes fail to catch corruption |
+| Malicious or malformed user input | Input validation, range checking, string length limits — prevents denial of service |
+| Misconfigured NTP server reporting wrong time | Configure NTP with multiple servers; client compares them and excludes outliers |
+
+#### Response Time Guarantees and Real-Time Systems
+
+Some environments (aircraft, rockets, robots, cars) require **hard real-time** responses: a specified deadline that must never be missed. Real-time systems require support from all levels: a real-time OS (RTOS) with guaranteed CPU scheduling, libraries with documented worst-case execution times, restricted memory allocation, and extensive testing. This is very expensive and restricts which languages and tools can be used.
+
+For most server-side data processing systems, real-time guarantees are not economical or appropriate. "Real-time" is not the same as "high-performance" — real-time systems may have lower throughput because they prioritize timely responses above all else.
+
+**Practical mitigation**: treat GC pauses like brief planned outages. Stop sending requests to a node when it needs GC, let it finish outstanding requests, then collect garbage while idle. Some latency-sensitive financial trading systems use this approach. Alternatively, restart processes periodically before they accumulate enough long-lived objects to require a full GC.
+
+#### System Models
 
 **System models** for reasoning about distributed systems:
 
 | Network | Clocks | Nodes | Model |
 |---------|--------|-------|-------|
-| Partially synchronous | Partially synchronous | Crash-stop | Most realistic |
+| Partially synchronous | Partially synchronous | Crash-stop | Most realistic for real systems |
 | Asynchronous | Asynchronous | Crash-stop | Hardest to build for |
 
+**Partially synchronous** means the system behaves like a synchronous system most of the time, but sometimes exceeds bounds for delays and clock drift. This matches real-world systems well.
+
 **Safety vs liveness**:
-- **Safety**: "nothing bad ever happens" — can be violated at a specific point in time
-- **Liveness**: "something good eventually happens" — can only be violated over infinite time
+- **Safety**: "nothing bad ever happens" — can be violated at a specific point in time (e.g., "no two nodes believe they are leader simultaneously")
+- **Liveness**: "something good eventually happens" — can only be violated over infinite time (e.g., "a request eventually receives a response")
 
 For distributed algorithms: we need safety always, and liveness most of the time (under "good enough" conditions).
 
@@ -102,92 +304,292 @@ For distributed algorithms: we need safety always, and liveness most of the time
 
 Different databases offer different consistency models. Understanding them is critical:
 
-**Eventual consistency**: if no new writes happen, eventually all replicas will converge to the same value. Very weak guarantee — the word "eventually" does a lot of work.
+**Eventual consistency**: if no new writes happen, eventually all replicas will converge to the same value. Very weak guarantee — the word "eventually" does a lot of work. It doesn't say *when* the replicas will converge. Until then, reads could return anything — or nothing.
 
-**Stronger guarantees** require coordination, which has costs. This chapter covers the spectrum.
+> Eventual consistency is hard for application developers because it is so different from the behavior of variables in a normal single-threaded program. A database looks like a variable you can read and write, but it has much more complicated semantics.
+
+**Stronger guarantees** require coordination, which has costs. This chapter covers the spectrum from eventual consistency through causal consistency to linearizability, and ultimately to consensus.
 
 ### Linearizability
 
 The **strongest** consistency model. Makes a distributed system *appear* as if there is only one copy of the data, and operations are atomic.
 
-> If one client's write completes before another client's read begins, the read must return the new value.
+#### Formal Definition
 
-More precisely: all operations on the system appear to happen at a single instant in time, and each operation appears to take effect atomically at some point between when it was invoked and when it returned.
+All operations appear to take effect **atomically at some point between invocation and completion**. This is not just "read the latest write" — there is a **real-time ordering constraint**: if operation A completes before operation B begins, then B must see the effects of A.
 
-**Where linearizability matters**:
-- **Locking and leader election**: only one node should hold the lock at a time — requires linearizable agreement
-- **Constraints and uniqueness**: usernames must be unique — requires linearizable checks
-- **Cross-channel timing**: "video uploaded" message arrives before the video processing completes, causing a race
+The system behaves as if there is a single **register** (one copy of each value). Every read returns the value of the most recent write. Once any client has read a new value, all subsequent reads (by any client) must also return the new value — even if the write hasn't been acknowledged yet.
 
-**Implementing linearizable systems**:
-- Single-leader replication: linearizable if reads go to the leader (or synchronous followers)
-- Multi-leader replication: NOT linearizable (concurrent writes on different leaders)
-- Leaderless replication: NOT linearizable even with quorums (due to concurrent writes)
+> Linearizability is a recency guarantee. It doesn't group operations into transactions — it's about individual objects. Think of it as: the system has a single timeline, and every operation snaps to a specific point on it.
 
-**The CAP theorem**: A linearizable (Consistent) system that is also Available during network Partitions would require a miracle. You can't have all three. But CAP is often misunderstood:
-- Every system has network partitions (you can't prevent them)
-- The real choice is: during a partition, do you remain available (and sacrifice consistency) or consistent (and sacrifice availability)?
-- Most modern databases choose: CP (linearizable, unavailable during partitions) or AP (available, eventually consistent)
+#### Linearizability vs Serializability
 
-**Cost of linearizability**: to make a system linearizable, nodes must coordinate on every write, adding latency. This is why many databases offer weaker guarantees by default.
+These two terms sound similar and are often confused, but they are fundamentally different concepts:
+
+| Property | What it guarantees | Scope | Level |
+|----------|-------------------|-------|-------|
+| **Linearizability** | Recency guarantee — reads always return the most recent write, respecting real-time ordering | Single object (one register/key) | Consistency model |
+| **Serializability** | Transactions appear to execute in *some* serial order (not necessarily real-time order) | Multiple objects (whole transactions) | Transaction isolation level |
+
+**Key combinations:**
+
+- **Serializable but NOT linearizable**: snapshot isolation (SSI) reads from a consistent snapshot that may be stale. The whole point of a snapshot is that it does *not* include writes more recent than the snapshot.
+- **Linearizable but NOT serializable**: single-key operations with recency guarantees, but no multi-object transactions. Doesn't prevent write skew.
+- **Both (strict serializability)**: transactions in serial order *and* that order is consistent with real-time. Two-phase locking (2PL) and actual serial execution typically provide this. The strongest possible guarantee.
+
+> Linearizability is about single-object recency. Serializability is about multi-object transaction ordering. Having one does not imply having the other.
+
+#### Linearizability Use Cases in Detail
+
+**(a) Locking and leader election**: a system with single-leader replication needs to ensure exactly one leader. Every node that starts up tries to acquire a lock; the one that succeeds becomes leader. This lock **must** be linearizable — all nodes must agree on who owns it. ZooKeeper and etcd implement distributed locks using consensus algorithms to provide linearizable operations in a fault-tolerant way.
+
+**(b) Uniqueness constraints**: a username must uniquely identify one user. If two users concurrently try to claim the same username, one must succeed and the other must fail. This is equivalent to acquiring a lock on the username — it requires a linearizable compare-and-set operation.
+
+**(c) Cross-channel timing dependencies**: consider a web app where users upload photos and a background process resizes them. The web server writes the photo to file storage, then sends a message to a resize queue. If the file storage is **not** linearizable, the message queue might be faster than internal replication — the resizer fetches the image and sees an old version or nothing at all. The full-size and resized images become permanently inconsistent.
+
+This race condition arises because there are **two communication channels** (file storage and message queue) without a recency guarantee tying them together. Linearizability of the file storage prevents it.
+
+#### Implementing Linearizable Systems
+
+- **Single-leader replication**: potentially linearizable if reads go to the leader (or synchronous followers). But if the "leader" is actually deposed and doesn't know it, linearizability is violated.
+- **Consensus algorithms** (Raft, Zab, Paxos): linearizable. They contain measures to prevent split brain and stale replicas.
+- **Multi-leader replication**: NOT linearizable (concurrent writes on different leaders create conflicts).
+- **Leaderless replication**: NOT linearizable even with quorums.
+
+#### Quorum Non-Linearizability Example
+
+Even strict quorums (w + r > n) do not guarantee linearizability. Consider n=3, w=3, r=2:
+
+```
+Writer sends new value to all 3 replicas (w=3)
+
+Client A reads from replicas 1 and 2 (r=2):
+  - Replica 1: has new value
+  - Replica 2: has new value
+  - Client A sees: new value
+
+Client B reads from replicas 2 and 3 (r=2):
+  - Replica 2: has new value
+  - Replica 3: has NOT received write yet
+  - Client B sees: old value (from replica 3)
+```
+
+Client B's read **starts after** Client A's read completes. Yet B returns the old value while A already returned the new value. The quorum condition w + r > n is met, but the execution is **not linearizable** — it violates the real-time ordering constraint.
+
+Making Dynamo-style quorums linearizable requires synchronous read repair before returning results, plus reading latest state before writing. Even then, only read/write operations (not compare-and-set) can be made linearizable this way.
+
+#### The CAP Theorem
+
+**Better framing**: "Consistent or Available when Partitioned."
+
+- Network partitions *will happen* whether you like it or not. You can't choose to avoid them.
+- When the network is working, you can have both consistency (linearizability) and availability.
+- When a partition occurs, you choose: linearizability (some replicas become unavailable) or availability (all replicas serve requests, but behavior is not linearizable).
+
+**Limitations of CAP as formally defined:**
+- Only considers one consistency model (linearizability) and one kind of fault (network partitions).
+- Doesn't say anything about network delays, dead nodes, or other trade-offs.
+- Has been **superseded by more precise results** and is mostly of historical interest.
+- The idiosyncratic definition of "availability" in the formal CAP theorem doesn't match the usual meaning.
+
+**Surprising fact**: even **RAM on a modern multi-core CPU is not linearizable**. Each CPU core has its own memory cache and store buffer. Memory access goes to cache first; changes are asynchronously written to main memory. A thread on one core writes to an address, and a thread on another core reads it — not guaranteed to see the write (unless a memory barrier/fence is used). There are now several copies of the data (main memory, plus various caches), asynchronously updated — linearizability is lost.
+
+Why make this trade-off? It makes no sense to use CAP to justify multi-core memory consistency — within one computer we assume reliable communication. The reason for dropping linearizability is **performance**, not fault tolerance. Accessing data in cache is much faster than going to main memory. This feature is essential for good performance on modern CPUs.
+
+The same is true for distributed databases that choose not to provide linearizable guarantees — they do so primarily to increase performance. A mathematical proof (Attiya and Welch) shows that if you want linearizability, the response time of read and write requests is **at least proportional to the uncertainty of delays in the network**. A faster algorithm for linearizability does not exist.
+
+> Linearizability is slow — and this is true all the time, not only during a network fault. Weaker consistency models can be much faster, so this trade-off is important for latency-sensitive systems.
 
 ### Ordering Guarantees
 
 Order of operations is fundamental to causality. If A causes B, A must appear before B in the order of operations.
 
-**Causality**: defines a partial order — some events are ordered (causally related), some are not (concurrent).
+#### Total Order vs Partial Order
+
+This is a mathematical distinction with deep implications for distributed systems:
+
+| Concept | Definition | Example |
+|---------|-----------|---------|
+| **Total order** | Any two elements are comparable — you can always say which is greater | Natural numbers: 5 &lt; 13, always |
+| **Partial order** | Some elements are incomparable — you can't always determine ordering | Sets: is &#123;a,b&#125; greater than &#123;b,c&#125;? Neither is a subset of the other. Incomparable. |
+
+Applied to consistency models:
+
+- **Linearizability = total order**. There is a single timeline. For any two operations, one happened first.
+- **Causality = partial order**. Causally related operations are ordered; concurrent operations are incomparable.
+
+In a linearizable datastore, there are no concurrent operations. Every request is handled atomically at a single point on a single timeline. Concurrency would mean the timeline branches and merges — and operations on different branches are incomparable (concurrent).
+
+#### Causal Consistency
 
 **Causal consistency** is weaker than linearizability but stronger than eventual consistency. It only requires causally related operations to be ordered, not all operations.
 
-**Sequence number ordering**: assign a sequence number to every operation from a single source (leader). Lamport timestamps: `max(local_counter, received_counter) + 1`. This gives a total order consistent with causality.
+**Linearizability is stronger than causal consistency**: any linearizable system automatically preserves causality. If there are multiple communication channels (e.g., file storage and message queue), linearizability ensures causality without any special effort. This is what makes linearizable systems simple to understand.
 
-**Total Order Broadcast** (also called atomic broadcast): a protocol for delivering messages reliably, in the same order to all nodes.
-- Reliable delivery: no messages are lost
-- Total ordering: every node delivers messages in the same order
+But linearizability harms performance and availability, especially with significant network delays. The good news: a middle ground exists.
 
-Total order broadcast is equivalent to consensus! If you can implement one, you can implement the other. Used for state machine replication — keep replicas in sync by having them execute the same sequence of operations.
+**Key advantages of causal consistency:**
+- It is the **strongest consistency model that does NOT slow down due to network delays**.
+- It **remains available during network failures**.
+- The **CAP theorem does not apply** to causal consistency.
+- Many systems that seem to require linearizability actually only need causal consistency.
+
+> This is an active area of research. Systems that preserve causality with performance characteristics similar to eventually consistent systems are being explored, though not yet widely deployed in production.
+
+To maintain causality, you need to know which operation happened before which other. The database tracks **causal dependencies**: if a node had already seen value X when it issued write Y, then X and Y may be causally related. Version vectors can be generalized to track causal dependencies across the entire database, not just for a single key.
+
+#### Sequence Number Ordering
+
+Assign a sequence number to every operation. If using a single leader, the leader increments a counter for each operation — this gives a total order consistent with causality.
+
+Without a single leader, generating consistent sequence numbers is harder. Methods like even/odd counters, physical timestamps, or pre-allocated blocks all produce sequence numbers that are **not consistent with causality**.
+
+#### Lamport Timestamps: Algorithm Detail
+
+Each node maintains a pair: **(counter, nodeID)**.
+
+**Algorithm:**
+1. On each local operation: `counter++`
+2. On sending a message: include current `(counter, nodeID)`
+3. On receiving a message with counter `received_counter`:
+   - Set `counter = max(received_counter, local_counter) + 1`
+
+**Total ordering**: compare counters; break ties by nodeID. This produces a total order consistent with causality — every causal dependency results in an increased timestamp.
+
+#### Lamport Timestamps vs Version Vectors
+
+| Property | Lamport timestamps | Version vectors |
+|----------|-------------------|-----------------|
+| Order type | **Total order** — all events get a unique position | **Partial order** — some events are incomparable |
+| Can detect concurrency? | **No** — two concurrent events still get ordered (arbitrarily by node ID tiebreaker) | **Yes** — can tell if two events are concurrent vs causally related |
+| Space complexity | O(1) — a single counter + node ID | O(n) — one entry per node |
+| Use case | Total order broadcast, consensus | Conflict detection in replicated data |
+
+> Lamport timestamps give you a total order consistent with causality, but they can't distinguish "happened before" from "concurrent." Version vectors can distinguish them but only give a partial order.
+
+#### Why Timestamps Alone Aren't Enough for Constraints
+
+Consider enforcing a uniqueness constraint (e.g., usernames). Two nodes both try to claim the same username. The lower timestamp "wins."
+
+The problem: **neither node knows what timestamps the other is assigning right now**. To be sure no other node has a lower-timestamped claim, you would have to check with every other node — and if one is unreachable, the system grinds to a halt.
+
+The total order of Lamport timestamps **only emerges after collecting ALL operations**. If another node has generated operations you haven't seen yet, you cannot construct the final ordering. The unknown operations may need to be inserted at various positions.
+
+> To implement something like a uniqueness constraint, it's not sufficient to have a total ordering of operations — you also need to know when that order is finalized. This is the problem that total order broadcast solves.
+
+#### Total Order Broadcast
+
+**Total Order Broadcast** (also called atomic broadcast): a protocol for exchanging messages between nodes with two safety properties:
+
+1. **Reliable delivery**: if a message is delivered to one node, it is delivered to all nodes. No messages are lost.
+2. **Totally ordered delivery**: every node delivers messages in the same order.
+
+This is exactly what you need for **state machine replication**: every replica processes the same writes in the same order, so replicas stay consistent.
+
+The order is **fixed at delivery time** — you cannot retroactively insert a message into an earlier position. This makes total order broadcast stronger than timestamp ordering.
+
+Another way to think about it: total order broadcast creates a **log** (replication log, transaction log). Delivering a message is like appending to the log. All nodes see the same sequence.
+
+#### Total Order Broadcast and Consensus Are Equivalent
+
+This equivalence is deep and worth understanding precisely. These two constructions prove it:
+
+#### From Total Order Broadcast to Linearizable Storage
+
+If you have total order broadcast, you can build a linearizable compare-and-set register:
+
+1. **Append** a message to the log: "I want to claim username X."
+2. **Read** the log and **wait** for your message to be delivered back to you.
+3. **Check** for any messages claiming username X. If the **first** message for X is yours, you win — commit the claim. If another user's message came first, abort.
+
+Because log entries are delivered in the same order to all nodes, all nodes agree on who got there first. The **log position** serves as a monotonically increasing sequence number.
+
+For linearizable reads, you must also sequence reads through the log (etcd's quorum read), or query the latest log position and wait for delivery (ZooKeeper's sync()), or read from a synchronously updated replica.
+
+#### From Linearizable Storage to Total Order Broadcast
+
+If you have a linearizable register with **atomic increment-and-get**, you can build total order broadcast:
+
+1. For every message, call increment-and-get on the linearizable integer to get a sequence number.
+2. Attach the sequence number to the message.
+3. Send the message to all nodes.
+4. Recipients deliver messages in sequence-number order.
+
+**Key difference from Lamport timestamps**: the numbers from increment-and-get form a sequence **with no gaps**. If a node has delivered message 4 and receives message 6, it knows it must wait for message 5. Lamport timestamps have gaps, so you can never be sure there isn't a missing message.
+
+#### Three Equivalent Problems
+
+> "It can be proved that a linearizable compare-and-set register and total order broadcast are both equivalent to consensus. That is, if you can solve one of these problems, you can transform it into a solution for the others. This is quite a profound and surprising insight."
+
+**Linearizable compare-and-set = Total order broadcast = Consensus.** Solving any one gives you the other two.
 
 ### Distributed Transactions and Consensus
 
 **Consensus problem**: get multiple nodes to agree on a single value. Required for:
-- Leader election (all nodes agree on who the leader is)
-- Atomic commit (all nodes agree on whether a transaction committed or aborted)
+- **Leader election**: all nodes agree on who the leader is
+- **Atomic commit**: all nodes agree on whether a transaction committed or aborted
 
-**Atomic commit**: all nodes must agree to commit or all must abort. This is hard because:
-- If a node crashes mid-commit, did it commit or not?
-- You can't undo a commit on some nodes but not others
+#### Single-Node vs Distributed Atomic Commit
 
-**Two-Phase Commit (2PC)**:
-1. **Prepare phase**: coordinator sends "prepare?" to all participants. Each participant either votes "yes" (and promises to commit if asked) or "no"
-2. **Commit phase**: if all voted yes, coordinator sends "commit" to all. If any voted no, sends "abort"
+On a single node, transaction atomicity is straightforward: the storage engine writes data to the WAL, then appends a commit record. If the node crashes before the commit record is written, the transaction is rolled back on recovery. The **commit point** is the moment the disk finishes writing the commit record.
 
-The coordinator is a single point of failure. If it crashes after the prepare phase but before the commit phase, participants are stuck in an uncertain state — they promised to commit but haven't received the commit order. They must wait for the coordinator to recover. **This is why 2PC is called a "blocking" protocol.**
+With multiple nodes, this breaks down. Different nodes may detect different faults: one node sees a constraint violation and must abort, while others succeed. Commit requests may be lost in the network. Some nodes may crash before writing the commit record. Once a transaction is committed on one node, it **cannot be retracted** — it becomes visible to other transactions that may depend on it.
 
-**Three-Phase Commit (3PC)**: designed to be non-blocking, but requires a synchronous network (no unbounded delays) — not realistic.
+#### Two-Phase Commit (2PC): Detailed Mechanics
 
-**Distributed Transactions in Practice**:
+2PC uses a **coordinator** (also called transaction manager) — a component that does not appear in single-node transactions. The coordinator is often a library within the same application process (e.g., embedded in a Java EE container), but can be a separate service.
+
+**Phase 1 — Prepare:**
+1. Coordinator sends "prepare?" to all **participants** (database nodes in the transaction).
+2. Each participant votes: "yes" (promises it can commit if asked) or "no."
+3. Once a participant votes "yes," it has made a **promise** — it must be able to commit if asked, even if it crashes and restarts. It writes the transaction data to its WAL.
+
+**Phase 2 — Commit/Abort:**
+1. If **all** participants voted "yes": coordinator writes the commit decision to its own WAL (the **commit point**), then sends "commit" to all participants.
+2. If **any** participant voted "no": coordinator sends "abort" to all.
+3. Once the commit decision is written, it must be enforced — even if retries are needed.
+
+**The marriage ceremony analogy**: the minister asks bride and groom individually whether each wants to marry. Both say "I do." After both affirmative responses, the minister pronounces them married. Once pronounced, it cannot be undone (even if one later changes their mind — that requires a separate process: divorce).
+
+**The critical failure mode**: if the coordinator **crashes between writing its commit decision and sending commit requests** to participants, the participants are stuck in an **uncertain state**. They promised to commit but haven't received the commit order. They **cannot** unilaterally abort (they promised!) or commit (they haven't been told to). They **must wait** for the coordinator to recover.
+
+> This is why 2PC is called a "blocking" protocol. In the uncertain state, participants hold locks on the rows they modified, blocking all other transactions that try to access those rows. If the coordinator never comes back, those locks are held forever (until manual intervention).
+
+**What happens in practice when the coordinator crashes:**
+
+1. Participants that voted "yes" are stuck. They cannot communicate with each other to resolve the situation (the protocol doesn't provide for this).
+2. The coordinator's transaction log (on disk) is the source of truth. When the coordinator recovers, it reads its log: if a commit record is found, it sends commit to all participants. If no commit record, it sends abort.
+3. If the coordinator's disk is lost, an administrator must manually decide the outcome — examining each participant's state to figure out what happened.
+4. Many implementations of 2PC have a timeout: if the coordinator doesn't respond within some time, participants can decide to abort unilaterally. But this violates the protocol's safety guarantee and can lead to inconsistency.
+
+**Coordinator failure is a real operational problem**: orphaned in-doubt transactions can hold database locks for hours or days, blocking all other work. This is one of the main reasons 2PC has a poor reputation in practice.
+
+**Three-Phase Commit (3PC)**: designed to be non-blocking, but requires a synchronous network (bounded delays) — not realistic in practice.
+
+#### XA Transactions
+
+**XA** (eXtended Architecture) is a standard interface for **heterogeneous distributed transactions** — transactions spanning different database systems, message brokers, etc.
+
+- Standardized as X/Open XA. Supported by Java EE / JTA.
+- The coordinator is typically implemented by the application server (not the database).
+- **Poor performance**: holding locks across multiple systems for the duration of 2PC, including coordinator recovery.
+- **Operational complexity**: coordinator logs must be durable; if the coordinator crashes with in-doubt transactions, manual resolution is often needed.
+- **Most large-scale systems avoid XA transactions** in favor of other approaches (saga pattern, eventual consistency, etc.).
+
+#### Distributed Transactions in Practice
 
 | Type | Mechanism | Used by |
 |------|-----------|---------|
-| Database-internal | Shared transaction protocol between nodes with same software | VoltDB, MySQL Cluster |
-| Heterogeneous (XA transactions) | Standard interface (X/Open XA) across different systems | Java EE, JTA |
+| Database-internal | Shared transaction protocol between nodes running same software | VoltDB, MySQL Cluster |
+| Heterogeneous (XA) | Standard interface across different systems | Java EE, JTA, WS-AtomicTransaction |
 
-XA transactions work but have poor performance and operational complexity. Many large-scale systems avoid them.
+Database-internal distributed transactions can use optimized protocols since all nodes run the same software. Heterogeneous transactions (XA) must use a generic protocol, leading to worse performance.
 
 ### Fault-Tolerant Consensus
 
 Can we do atomic commit without a coordinator single point of failure?
 
-**Paxos**: the classic consensus algorithm. Notoriously complex. Variants: Multi-Paxos, Cheap Paxos, Fast Paxos.
-
-**Raft**: designed to be understandable. Used by etcd, CockroachDB. Key concepts:
-- Leader election: nodes vote for a leader for each "term"
-- Log replication: leader receives writes, replicates to followers via log
-- Commits when a quorum of nodes have written the entry
-
-**Zab** (ZooKeeper): used internally by Apache ZooKeeper.
-
-**Consensus algorithm properties**:
+**Consensus algorithm properties:**
 - **Uniform agreement**: no two nodes decide differently
 - **Integrity**: a node only decides a value that was proposed
 - **Validity**: proposed values are from valid proposals
@@ -195,15 +597,97 @@ Can we do atomic commit without a coordinator single point of failure?
 
 All consensus algorithms require a majority (quorum) of nodes to be functioning. A 3-node cluster tolerates 1 failure; a 5-node cluster tolerates 2.
 
+#### Epoch Numbering: The Core Mechanism
+
+All major consensus protocols — Paxos, Raft, and Zab — share a common structure built around **epoch numbering**:
+
+| Protocol | Term for epoch |
+|----------|---------------|
+| **Raft** | "term" |
+| **Paxos** | "ballot number" |
+| **Zab** (ZooKeeper) | "epoch" |
+
+The mechanism:
+
+1. Within each epoch, there is a **unique leader**. The epoch number increases monotonically.
+2. When the current leader is thought to be dead, nodes start a vote to elect a new leader. The new leader gets a higher epoch number.
+3. Before a leader can decide anything (commit a log entry, accept a value), it must **collect votes from a quorum** of nodes.
+4. The quorum for **this** epoch must overlap with the quorum for the **previous** epoch. At least one node participated in both votes.
+5. That overlapping node informs the new leader about any decisions made in the previous epoch, ensuring **no conflicting decisions**.
+
+```
+Epoch 1: Leader A, quorum = [A, B, C]       (nodes A, B, C voted)
+             |
+       A crashes
+             |
+Epoch 2: Leader B, quorum = [B, C, D]       (nodes B, C, D voted)
+                              ^-- B and C overlap with epoch 1
+                                  They tell the new leader about
+                                  any decisions from epoch 1
+```
+
+> The key insight: the quorum overlap between consecutive epochs guarantees continuity. The new leader always knows what the old leader decided, preventing split-brain and conflicting commits.
+
+**Difference from 2PC**: both involve voting, but consensus algorithms **don't require all nodes to agree** — only a quorum. When a leader fails, a new epoch starts and progress continues. 2PC requires unanimity and blocks if the coordinator fails.
+
+#### The FLP Impossibility Result
+
+The **FLP result** (Fischer, Lynch, Paterson, 1985) proves that **no deterministic algorithm can guarantee reaching consensus in an asynchronous system if even one node can crash**.
+
+This is a foundational theorem of distributed computing. In a **purely asynchronous model** (no clocks, no timeouts, no bound on message delays), consensus is impossible to solve with guaranteed termination.
+
+How do real systems work despite FLP?
+
+| Workaround | How it helps |
+|-----------|-------------|
+| **Timeouts (partial synchrony)** | Assume the network is eventually timely — not always, but often enough. This lets you detect leader failures and elect a new one. |
+| **Randomized algorithms** | Introduce randomness (e.g., random election timeouts in Raft) to break symmetry and avoid livelock. FLP only applies to deterministic algorithms. |
+| **Assume crashes are rare** | In practice, the network is usually well-behaved. The algorithm works most of the time, even if it can't be formally guaranteed. |
+
+> FLP tells us consensus is impossible in theory (in a purely asynchronous model). In practice, we use partial synchrony assumptions and randomization to build systems that work reliably — even if they can't be formally guaranteed to terminate in every possible execution.
+
+#### Major Consensus Algorithms
+
+**Paxos** (Lamport, 1998): the classic consensus algorithm. Notoriously difficult to understand and implement correctly. Most real implementations use **Multi-Paxos**, which optimizes for a stable leader rather than running a full Paxos round for every decision. Other variants: Cheap Paxos, Fast Paxos.
+
+**Raft** (Ongaro and Ousterhout, 2014): designed explicitly for understandability. Used by etcd, CockroachDB, Consul. Key concepts:
+- **Leader election**: nodes vote for a leader for each "term" (epoch). Random election timeouts break symmetry and prevent split votes.
+- **Log replication**: leader receives writes, replicates to followers via append-only log.
+- **Commit**: an entry is committed when a quorum of nodes have written it to their logs. The leader then notifies followers.
+- **Safety**: a candidate can only win an election if its log is at least as up-to-date as a majority of nodes. This prevents electing a leader that is missing committed entries.
+
+**Zab** (ZooKeeper Atomic Broadcast): used internally by Apache ZooKeeper. Similar epoch-based structure. Optimized for the primary-backup pattern where all writes go through a single leader.
+
+**Limitations of consensus algorithms:**
+- The process of voting on proposals is a form of synchronous replication — every decision requires messages to a quorum. Performance is limited by network round-trips.
+- Consensus requires a strict majority. A 3-node cluster can tolerate 1 failure; 5 nodes can tolerate 2. If too many nodes fail, the system stops making progress.
+- Most consensus algorithms assume a fixed set of nodes. Adding or removing nodes requires careful reconfiguration (joint consensus, membership changes).
+- Consensus algorithms are generally sensitive to network problems. Raft can enter pathological leader-election loops if the network is particularly unreliable.
+
 ### Coordination Services: ZooKeeper and etcd
 
-**ZooKeeper** and **etcd** provide a distributed key-value store with linearizable reads/writes. Used for:
-- **Leader election**: all candidates try to create the same path atomically — only one succeeds
-- **Service discovery**: register services and their addresses
-- **Distributed locks**: use ephemeral nodes (auto-delete when client disconnects)
-- **Membership**: track which nodes are alive
+**ZooKeeper** and **etcd** provide a distributed key-value store with consensus-based replication. They are not meant as general-purpose databases — they hold small amounts of metadata that can fit entirely in memory.
 
-These services are usually run with an odd number of nodes (3 or 5) and use consensus internally. Applications delegate distributed coordination to these services rather than implementing it themselves.
+**Key features:**
+
+| Feature | Description | Use case |
+|---------|-------------|----------|
+| **Linearizable writes** | All writes go through consensus; totally ordered | Configuration changes, leader election |
+| **Optionally linearizable reads** | By default, reads can be served by any replica (possibly stale). For linearizable reads: etcd uses "quorum read"; ZooKeeper requires calling `sync()` first | Reading configuration that must be up-to-date |
+| **Ephemeral nodes** | Auto-delete when the client session ends (heartbeat timeout) | Distributed locks, leader election — lock is automatically released if holder dies |
+| **Watch notifications** | Clients subscribe to changes on a key/path and get notified | Service discovery — detect when services come and go |
+
+**Typical deployment**: 3 or 5 nodes (odd number for majority quorum). Applications delegate distributed coordination to these services rather than implementing consensus themselves.
+
+**Leader election pattern**: all candidates try to create the same ephemeral node atomically. Only one succeeds — it becomes leader. When the leader dies, its session expires, the ephemeral node is deleted, and the other candidates are notified via watch. They race to create the node again.
+
+**Service discovery pattern**: services register themselves by writing their address to a key. Other services watch for changes. Because service discovery doesn't require linearizability (stale reads are usually tolerable), it works even during network partitions.
+
+**Fencing tokens from ZooKeeper**: the transaction ID `zxid` or node version `cversion` are monotonically increasing and can serve as fencing tokens for distributed locks. The sequence number from total order broadcast is naturally a fencing token.
+
+**Membership services**: ZooKeeper can be viewed as a membership service — it determines which nodes are currently alive and active members of the cluster. Due to unbounded network delays, you can't reliably detect whether a node has failed. But consensus-based failure detection ensures that all nodes agree on which nodes are alive, even if some nodes are actually unreachable.
+
+> ZooKeeper, etcd, and Consul are the "outsourced consensus" layer for distributed systems. They solve the hard coordination problems so your application doesn't have to. Writing your own consensus implementation is almost certainly a mistake.
 
 ---
 
@@ -211,9 +695,9 @@ These services are usually run with an odd number of nodes (3 or 5) and use cons
 
 | Chapter | Key Ideas |
 |---------|-----------|
-| 8 | Unreliable networks, clocks, process pauses. Partial failures. Fencing tokens. |
-| 9 | Linearizability, CAP theorem, total order broadcast, 2PC, Raft/Paxos, ZooKeeper |
+| 8 | Cloud vs HPC fault philosophy, unreliable networks (12 faults/month, sharks, switch upgrades), network congestion queueing (4 sources), TCP vs UDP trade-off, clock drift (200 ppm, 35ms NTP error, MiFID II), timestamp ordering failures (silent data loss), process pauses (HBase bug), fencing tokens, Byzantine faults (2/3 supermajority), weak forms of lying, system models |
+| 9 | Linearizability formal definition (atomic point between invocation and completion), linearizability vs serializability, quorum non-linearizability, CAP (superseded, even RAM isn't linearizable), causal consistency (strongest without slowdown), total vs partial order, Lamport timestamps algorithm, timestamps insufficient for constraints, total order broadcast (two properties), three equivalent problems (consensus = total order broadcast = linearizable CAS), 2PC detailed mechanics (blocking protocol), XA transactions, epoch numbering, FLP impossibility, ZooKeeper/etcd (ephemeral nodes, watches) |
 
-**Key insight for the week:** Distributed systems are fundamentally unreliable. The good news is that you can build reliable systems on top of unreliable components — but you have to be very precise about what guarantees you need and what it costs to achieve them.
+**Key insight for the week:** Distributed systems are fundamentally unreliable. The good news is that you can build reliable systems on top of unreliable components — but you have to be very precise about what guarantees you need and what it costs to achieve them. The three equivalent problems — consensus, total order broadcast, and linearizable compare-and-set — are the foundation. If you can solve one, you can solve the others.
 
 > "In a distributed system, we must accept the possibility of partial failures and build fault-tolerance mechanisms into the software."

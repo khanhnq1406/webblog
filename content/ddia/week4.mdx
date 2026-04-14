@@ -29,6 +29,25 @@ Batch processing in Unix (pipes and shell scripts) embodies four principles:
 
 The pipe `|` is the key abstraction: programs communicate via stdin/stdout, are loosely coupled, and compose freely. This design philosophy scales surprisingly well.
 
+Doug McIlroy, the inventor of Unix pipes, stated the philosophy most concisely:
+
+> "Write programs that do one thing and do it well. Write programs to work together. Write programs to handle text streams, because that is a universal interface."
+
+This quote is the intellectual ancestor of MapReduce. In Unix, you compose small tools via pipes: `cat access.log | awk '...' | sort | uniq -c | sort -rn | head -5`. Each tool reads stdin, processes it, writes stdout. The text stream is the universal interface between them.
+
+**MapReduce is this same idea, distributed across thousands of machines.** Instead of text lines flowing through pipes on one machine, key-value pairs flow through map and reduce functions across a cluster. HDFS plays the role of the filesystem, and the MapReduce framework handles the plumbing.
+
+However, there is a critical difference in how data flows between stages:
+
+| Property | Unix Pipes | MapReduce |
+|----------|-----------|-----------|
+| Data flow | Streaming — small memory footprint | Materializes intermediate state to HDFS |
+| Backpressure | Automatic (pipe buffer fills up, producer blocks) | N/A — each stage runs to completion |
+| Failure handling | If a stage crashes, pipeline stops | If a task fails, just re-run it (input is on HDFS) |
+| Latency | Low — output appears as soon as first records are processed | High — each stage must finish before the next starts |
+
+Unix pipes *stream* data: the downstream program can start consuming output before the upstream program has finished producing it, using only a small buffer of memory. MapReduce *materializes* each stage: the map output is written to disk, sorted, and only then does the reduce phase begin. This materialization is what makes MapReduce fault-tolerant (you can re-run a failed task without re-running the whole pipeline), but it is also what makes it slow.
+
 ### MapReduce
 
 MapReduce is the batch processing programming model made famous by Google (2004 paper) and implemented in Hadoop.
@@ -67,7 +86,7 @@ Relational databases handle joins automatically. In MapReduce, you implement the
 - No reducer needed — much faster for small-large joins
 
 **Partitioned hash join**:
-- Both datasets partitioned the same way → mappers only join their local partition
+- Both datasets partitioned the same way — mappers only join their local partition
 - Requires both datasets to be partitioned identically
 
 ### The Output of Batch Workflows
@@ -83,15 +102,197 @@ The key property: **batch jobs read immutable input and produce immutable output
 - Easy to roll back (just delete the bad output and re-run)
 - Easy to audit (input and output both preserved)
 
-### Beyond MapReduce
+#### Building Search Indexes in Batch
 
-MapReduce is simple but verbose and slow (writes to HDFS between every step). Modern alternatives:
+Google's original use of MapReduce was to build indexes for its search engine — a workflow of 5 to 10 MapReduce jobs. A full-text search index like Lucene consists of a term dictionary (look up a keyword, get all document IDs containing it) plus additional data for ranking results by relevance.
 
-**Apache Spark**: uses in-memory pipeline. Intermediate results stay in RAM rather than being materialized to disk. Much faster for iterative algorithms (machine learning, graph processing).
+The batch job process:
+1. Mapper reads a set of documents, extracts terms and positions
+2. Reducer merges postings lists for each term
+3. Output: immutable index segment files written to HDFS
+4. Search servers load these files and serve read-only queries
 
-**Dataflow engines** (Flink, Tez): generalize MapReduce by allowing arbitrary DAGs of operations rather than just map-then-reduce. Operators that require sorting are explicitly specified; others aren't forced into a sort phase.
+If documents change, you have two options:
+- **Full rebuild**: periodically rerun the entire indexing workflow and replace the old index. Simple to reason about: documents in, indexes out.
+- **Incremental**: Lucene writes new segment files and asynchronously merges/compacts in the background.
 
-**Pregel model**: for graph algorithms (PageRank, shortest paths). Vertices exchange messages along edges. Works well when computation fits the graph's structure.
+The key insight is that **search is derived output** — the index is derived from the source documents. If the derivation logic is wrong, you can fix it and re-derive. This philosophy extends to all batch outputs.
+
+### Materialization of Intermediate State
+
+A major limitation of MapReduce is how it handles multi-stage workflows. Real batch jobs are rarely a single MapReduce step — they are chains of jobs where the output of one becomes the input of the next.
+
+MapReduce writes intermediate results to files in HDFS between every stage. This is called **materialization of intermediate state**. Consider a three-stage pipeline:
+
+```
+Job 1 (Map + Reduce) → writes to HDFS
+Job 2 (Map + Reduce) → reads from HDFS, writes to HDFS
+Job 3 (Map + Reduce) → reads from HDFS, writes final output
+```
+
+Every arrow is a full write-to-disk-and-read-from-disk cycle. The intermediate files between Job 1 and Job 2 are only useful as input to Job 2 — they are never read by anyone else. Writing them to HDFS (with replication!) is wasteful.
+
+This creates several problems:
+- **Latency**: each job must wait for the previous one to finish completely before it can start
+- **I/O overhead**: intermediate data is written to disk and replicated across the cluster, even though it is temporary
+- **Scheduling overhead**: each MapReduce job needs to be scheduled independently by the framework
+
+> **Key insight:** MapReduce's materialization is like writing the output of every Unix command to a temporary file on disk, then having the next command read that file — instead of just piping the output directly.
+
+This is exactly the problem that **dataflow engines** like Spark and Flink solve. They pipeline operators together: the output of one operator feeds directly into the next, kept in memory where possible. They only materialize to disk when they need to (for shuffles, or for fault tolerance checkpoints). This is a major reason why **Spark is 10-100x faster than MapReduce for iterative algorithms** like PageRank or machine learning gradient descent — algorithms that loop through the same data many times would otherwise write it to HDFS on every iteration.
+
+### Beyond MapReduce: Dataflow Engines
+
+MapReduce is simple but verbose and slow (writes to HDFS between every step). Modern alternatives like **Spark**, **Flink**, and **Tez** handle an entire workflow as one job rather than breaking it into independent subjobs.
+
+Since they explicitly model the flow of data through several processing stages, these systems are called **dataflow engines**. Unlike MapReduce, their functions (called **operators**) need not take the strict roles of alternating map and reduce — they can be assembled in more flexible ways.
+
+#### Three Connection Options Between Operators
+
+| Connection Type | What It Does | When Used |
+|----------------|-------------|-----------|
+| **Repartition + sort** | Shuffle by key and sort, like MapReduce | Sort-merge joins, grouping by key |
+| **Partitioned same way** | Both inputs already partitioned identically, skip sorting | Partitioned hash joins — partitioning matters but order doesn't |
+| **Broadcast hash join** | Send one operator's full output to all partitions of the next | Small dataset joined with large dataset |
+
+#### Advantages Over MapReduce
+
+1. **Sorting only where needed**: expensive sort only happens in places where it is actually required, not by default between every map and reduce stage
+2. **No unnecessary map tasks**: work done by a mapper can be incorporated into the preceding reduce operator
+3. **Locality optimizations**: since all joins and data dependencies are explicitly declared, the scheduler can place tasks that consume data on the same machine as the task that produces it — data exchanged through shared memory buffer, not network
+4. **Intermediate state in memory or local disk**: not HDFS with replication. MapReduce already does this for mapper output; dataflow engines generalize it to all intermediate state
+5. **Pipelined execution**: operators start as soon as their input is ready — no need to wait for the entire preceding stage to finish
+6. **JVM reuse**: existing JVM processes can run new operators, reducing startup overhead (MapReduce launches a new JVM for each task)
+
+Workflows implemented in Pig, Hive, or Cascading can be switched from MapReduce to Tez or Spark with a simple configuration change — no code modifications needed.
+
+#### Fault Tolerance in Dataflow Engines
+
+MapReduce gets fault tolerance for free from materialization: if a task fails, re-read input from HDFS. Dataflow engines avoid writing intermediate state to HDFS, so they take a different approach.
+
+**Spark — Resilient Distributed Datasets (RDDs)**:
+- The framework tracks the **ancestry** (lineage) of each piece of data: which input partitions it used, which operators were applied
+- If a machine fails and intermediate state is lost, Spark **recomputes** it from earlier data that is still available
+- Recomputation follows the lineage graph back to the nearest materialized data (or the original HDFS input)
+
+**Flink — Periodic Checkpoints**:
+- Flink periodically **snapshots** operator state to durable storage
+- On failure, it resumes from the last checkpoint rather than recomputing from scratch
+- Built around the idea of pipelined execution: incrementally passing output of one operator to the next
+
+**The determinism requirement**: when recomputing data, it matters whether the computation is deterministic. If recomputed data differs from the original lost data, downstream operators face contradictions. Sources of nondeterminism that must be eliminated:
+
+- **Hash table iteration order**: many languages don't guarantee ordering when iterating over hash maps
+- **Random numbers**: probabilistic/statistical algorithms rely on randomness — must use fixed seeds for reproducibility
+- **System clock**: any use of wall-clock time introduces nondeterminism
+- **External data sources**: reading from external systems during processing
+
+If an operator is nondeterministic, the framework must kill downstream operators and re-run them on the new data — cascading failures.
+
+**Trade-off: recompute vs materialize**: if the intermediate data is much smaller than the source, or if the computation is very CPU-intensive, it may be cheaper to materialize intermediate data to files than to recompute it. This is a case-by-case judgment.
+
+### Graph Processing and the Pregel Model
+
+Many interesting computations operate on graph structures: social networks, web link graphs, road networks, knowledge graphs. Standard MapReduce is awkward for graph algorithms because they are inherently iterative — you repeatedly traverse edges until convergence.
+
+> **Important distinction**: a dataflow engine's DAG describes the *flow of data between operators* — the data itself is relational tuples. In graph processing, the *data itself* has the form of a graph. These are different things despite both involving the word "graph."
+
+#### Iterative Graph Processing with MapReduce
+
+It is possible to implement graph algorithms with iterative MapReduce:
+1. An external scheduler runs a batch process for one step of the algorithm
+2. When complete, check the convergence condition
+3. If not converged, run another round
+
+This is very inefficient: MapReduce reads the entire input dataset and produces a completely new output dataset every iteration, even if only a small part of the graph changed.
+
+#### The BSP (Bulk Synchronous Parallel) Model
+
+The **Pregel model** (named after the river in Konigsberg, of "Seven Bridges" fame) uses the BSP model of computation. Implementations include Apache Giraph, Spark's GraphX API, and Flink's Gelly API.
+
+The core idea is called **"thinking like a vertex"**:
+
+1. Each vertex in the graph is a computational unit
+2. In each iteration (**superstep**), every vertex:
+   - Receives messages sent to it in the previous superstep
+   - Performs some computation (updates its own state)
+   - Sends messages to its neighbors (along outgoing edges)
+3. Iterations continue until convergence
+
+**Termination**: a vertex can **vote to halt** — it declares itself inactive. An inactive vertex is woken up if it receives a new message. The algorithm terminates when *all vertices have voted to halt* and *no messages are pending*.
+
+A vertex remembers its state in memory from one iteration to the next — the function only needs to process new incoming messages. If no messages are being sent in some part of the graph, no work needs to be done.
+
+**Example — PageRank in Pregel**:
+```
+superstep 0: each vertex sets its rank to 1/N
+superstep i:
+  - receive rank contributions from all incoming neighbors
+  - new_rank = 0.15/N + 0.85 * sum(contributions)
+  - if rank changed significantly, send new_rank/out_degree to all neighbors
+  - otherwise, vote to halt
+```
+
+**Fault tolerance** works via **checkpointing**: periodically, all vertex states and in-flight messages are saved to durable storage. On failure, the simplest approach rolls back the entire graph to the last checkpoint. If the algorithm is deterministic and messages are logged, selective recovery of only the lost partition is possible.
+
+#### Limitations and Alternatives
+
+Graph algorithms often have heavy **cross-machine communication overhead**. The intermediate state (messages between vertices) is often bigger than the original graph. This causes:
+
+- **Stragglers**: cross-partition messages mean some partitions wait for others, slowing the whole superstep
+- **Network bottleneck**: the overhead of sending messages can significantly slow down distributed graph algorithms
+
+Graphs are often partitioned by arbitrarily assigned vertex ID, making no attempt to group related vertices together. Finding an optimized partitioning where communicating vertices are colocated is hard.
+
+**Alternatives** to vanilla Pregel:
+- **GraphChi**: single-machine processing for graphs that fit on disk but not in memory
+- **GraphX** (Spark): graph processing on top of a dataflow engine, can combine graph operations with standard relational operations
+- **Single-machine algorithms**: if your graph fits in memory on one machine, a single-threaded algorithm will likely outperform a distributed batch process
+
+> **Practical takeaway**: don't distribute a graph algorithm unless you have to. A single machine with enough RAM is simpler and often faster than a cluster running Pregel.
+
+### High-Level APIs and Declarative Queries
+
+Writing raw MapReduce jobs in Java is tedious — hundreds of lines of boilerplate for simple operations. This led to higher-level abstractions:
+
+| Tool | Abstraction | Runs On |
+|------|------------|---------|
+| **Pig** | Pig Latin — a scripting language for data transformations | MapReduce, Tez, Spark |
+| **Hive** | SQL-like queries (HiveQL) over HDFS data | MapReduce, Tez, Spark |
+| **Cascading** | Java API for defining data pipelines as flow graphs | MapReduce, Tez |
+| **Crunch** | Java/Scala API inspired by Google FlumeJava | MapReduce, Spark |
+
+These tools generate optimized execution plans (MapReduce jobs, Tez DAGs, or Spark stages) from higher-level descriptions. A Hive query like `SELECT url, COUNT(*) FROM logs GROUP BY url` compiles into the same MapReduce job you would write by hand — but in one line instead of fifty.
+
+When Tez emerged, these high-level languages could switch to the new dataflow engine without rewriting job code. Spark and Flink include their own high-level dataflow APIs, often inspired by FlumeJava.
+
+#### Query Optimizers in Batch Processing
+
+An advantage of specifying joins as relational operators (rather than spelling out the code) is that the framework can analyze the properties of the join inputs and automatically decide which join algorithm to use.
+
+**Spark's Catalyst optimizer** and Flink's optimizer can:
+- **Reorder joins** so that the amount of intermediate state is minimized
+- **Push down predicates** — filter early, reduce data flowing through the pipeline
+- **Choose between broadcast and shuffle joins** based on dataset sizes
+- **Use column-oriented storage layouts** — read only required columns from disk
+- **Vectorized execution** — iterate over data in tight inner loops friendly to CPU caches, avoiding function call overhead per record
+
+**Example**: a simple SQL query like:
+```sql
+SELECT u.name, COUNT(*) as purchases
+FROM purchases p JOIN users u ON p.user_id = u.id
+WHERE u.country = 'US'
+GROUP BY u.name
+ORDER BY purchases DESC
+LIMIT 10
+```
+The optimizer might decide to: (1) push the `WHERE u.country = 'US'` filter before the join, (2) broadcast the smaller `users` table as a hash join if it fits in memory, (3) perform a partial aggregation on each partition before the final merge. A hand-written MapReduce program would need to make all these decisions manually.
+
+The trend is clear: **batch processing is moving toward declarative query languages**, just like databases did decades ago. Spark SQL and Flink SQL let you write SQL queries that execute on a distributed dataflow engine. The optimizer decides how to partition, shuffle, and join — not the programmer.
+
+> **Key insight:** The evolution from raw MapReduce to Spark SQL mirrors the evolution from navigational databases (IMS, CODASYL) to relational databases and SQL. In both cases, declarative interfaces won because they allow the system to optimize execution automatically.
+
+However, MapReduce and its successors retain the ability to run **arbitrary user-defined functions** — parsing, NLP, image analysis, statistical algorithms. This freedom to call arbitrary code is what has long distinguished batch processing from MPP databases, and high-level APIs preserve it while adding optimizer benefits on top.
 
 ---
 
@@ -111,24 +312,61 @@ Events need to be transported from producers to consumers:
 
 **Direct messaging (no broker)**: producer sends directly to consumer. Simple, but what if consumer is offline? Buffer overflow? Messages lost.
 
-**Message brokers** (RabbitMQ, ActiveMQ, Azure Service Bus):
-- Intermediate between producer and consumer
-- Consumer is offline → broker queues messages
-- Acknowledgment model: consumer explicitly acks each message; broker retries on failure
-- Typically deleted after delivery
+Direct messaging approaches include:
+- **UDP multicast**: used in financial trading systems where latency is critical. A sender broadcasts to multiple recipients simultaneously. Messages can be lost; the application protocol must handle retransmission or accept data loss.
+- **ZeroMQ**: a brokerless messaging library. Producers connect directly to consumers via TCP. Provides message framing and reconnection but no durability — if a consumer is down, messages are dropped.
+- **StatsD/UDP metrics**: applications fire-and-forget metrics over UDP. Some metrics are lost, but for aggregated statistics, losing a few data points is acceptable.
 
-**Log-based message brokers** (Apache Kafka, Amazon Kinesis):
-- Messages stored durably on disk, in append-only log
-- Consumers track their **offset** in the log; broker doesn't track acks
-- Old messages can be re-read (replay from any offset)
-- Fan-out: multiple consumers read the same log independently
-- Partitioned log: log split across multiple machines for scaling
+These systems share a common trait: **they prioritize latency over reliability**. When you need sub-millisecond messaging (high-frequency trading, real-time game state), the overhead of writing to disk and waiting for acknowledgments is unacceptable. The application must handle message loss itself — retransmitting, using sequence numbers to detect gaps, or simply tolerating missing data.
 
-Kafka combines the durability of databases with the low-latency of messaging. It's become the backbone of many data architectures.
+### Message Broker Comparison
+
+There are two fundamentally different categories of message broker, and the choice between them has deep architectural implications:
+
+| Property | JMS/AMQP (RabbitMQ, ActiveMQ) | Log-based (Kafka, Kinesis) |
+|----------|-------------------------------|---------------------------|
+| **Message lifecycle** | Deleted after consumer acknowledgment | Retained on disk for configurable period |
+| **Reprocessing** | Not possible — message is gone after ack | Replay from any offset at any time |
+| **Ordering** | Per-message routing; order not guaranteed across consumers | Partition-level ordering guaranteed |
+| **Parallelism** | Multiple consumers compete for messages (load balancing) | One consumer per partition; scale by adding partitions |
+| **Consumer tracking** | Broker tracks per-message acknowledgment | Consumer tracks its own offset |
+| **Fan-out** | Each message delivered to one consumer (unless using exchanges/topics) | Multiple independent consumer groups read the same log |
+| **Backlog handling** | Queue grows; may apply backpressure or drop | Log is append-only; slow consumers just fall behind |
+
+**When to use JMS/AMQP style**:
+- Task queues where order doesn't matter (email sending, image resizing)
+- When messages are truly transient — process once and discard
+- When you need per-message routing to specific consumers
+
+**When to use log-based (Kafka)**:
+- Event-driven architectures where events must be replayable
+- CDC (change data capture) — derived systems need to catch up from any point
+- Multiple consumers need independent views of the same stream
+- Ordering within a partition matters (financial transactions, state changes)
+
+### Log Compaction in Kafka
+
+By default, Kafka retains messages for a configurable period (e.g., 7 days) and then deletes them. But Kafka also supports **log compaction** — a different retention strategy that is essential for CDC use cases.
+
+With log compaction, Kafka keeps **the latest value for each key** indefinitely. When multiple records have the same key, the older values are garbage collected, keeping only the most recent one. The result is that the compacted log is like a **snapshot of the database**: every key that was ever written has its most recent value preserved.
+
+```
+Before compaction:
+  offset 0: user-123 → (name: "Alice", city: "NYC")
+  offset 1: user-456 → (name: "Bob", city: "LA")
+  offset 2: user-123 → (name: "Alice", city: "SF")   ← updated
+  offset 3: user-456 → null                            ← deleted (tombstone)
+
+After compaction:
+  offset 2: user-123 → (name: "Alice", city: "SF")
+  (user-456 removed — tombstone means deletion)
+```
+
+This is powerful because it means a **CDC stream can bootstrap a new consumer from scratch** without needing a separate database snapshot. A new consumer simply reads the compacted topic from the beginning — it gets the latest value for every key, which is equivalent to a snapshot. Then it continues reading new events as they arrive. No need to coordinate a database dump, no need for two separate data pipelines (snapshot + stream).
 
 ### Databases and Streams
 
-The insight: **a database is fundamentally a log of state changes, and a stream is a log of events**. They're the same abstraction.
+The insight: **a database is fundamentally a log of state changes, and a stream is a log of events**. They are the same abstraction.
 
 **Change Data Capture (CDC)**: observe all writes to a database and publish them as a stream. Other systems (search indexes, caches, analytics warehouses) subscribe and keep themselves in sync.
 
@@ -142,7 +380,7 @@ The insight: **a database is fundamentally a log of state changes, and a stream 
 - Can reconstruct state at any point in time
 - Can derive multiple different views from the same event log
 - Popularized by DDD (Domain-Driven Design) community
-- Downside: replaying events to get current state can be slow → use snapshots
+- Downside: replaying events to get current state can be slow — use snapshots
 
 **State, streams, and immutability**: immutable event logs have big advantages. You can always derive new views from the same log. The log is the ground truth; derived state is just a cache.
 
@@ -159,11 +397,59 @@ Three main things you can do with a stream:
 
 **Stateful operations**: aggregations, joins, sessionization — require maintaining state.
 
-**Time in stream processing**:
+### Complex Event Processing (CEP)
+
+CEP is an approach developed in the 1990s for analyzing event streams, geared toward searching for certain event **patterns** — not just aggregations. Similarly to how a regular expression searches for patterns of characters in a string, CEP searches for patterns of events in a stream.
+
+**How it works**:
+- You specify rules using a high-level declarative query language (like SQL) or graphical UI
+- The processing engine maintains a **state machine** that performs matching against incoming events
+- When a match is found, the engine emits a **complex event** (a composite event summarizing the detected pattern)
+
+**Key difference from stream analytics**: the relationship between queries and data is reversed. In a normal database, data is persistent and queries are transient. In CEP, **queries are stored long-term**, and events continuously flow past them looking for matches.
+
+| Aspect | Stream Analytics | Complex Event Processing |
+|--------|-----------------|------------------------|
+| Focus | Aggregations, statistical metrics | Pattern detection across sequences of events |
+| Output | Counts, averages, percentiles | "Complex events" matching multi-event patterns |
+| Example | "Average latency over last 5 minutes" | "Alert when 3 failed logins followed by a password reset within 10 minutes" |
+| Query model | Windowed aggregations | State machine / pattern matching |
+
+**Implementations**: Esper, IBM InfoSphere Streams, Apama, TIBCO StreamBase, SQLstream. Some use a **Continuous Query Language (CQL)** — a SQL variant designed for streams rather than tables.
+
+### Time in Stream Processing
+
 - **Event time**: when the event actually occurred (in the source system)
 - **Processing time**: when the event was processed by the stream processor
 
 These differ due to network delays, batching, and retries. Handling late events gracefully is hard.
+
+#### Why the Distinction Matters
+
+Confusing event time and processing time leads to bad data. Example: if you redeploy a stream processor, it shuts down for a minute and processes the backlog when it comes back up. If you measure request rate based on processing time, you see a sudden anomalous spike during backlog processing — when the real rate was steady the whole time.
+
+The Star Wars analogy from the book: Episodes IV, V, VI were released in 1977, 1980, 1983. Episodes I, II, III came in 1999, 2002, 2005. Episode VII in 2015. The order you watched them (processing time) is inconsistent with the narrative order (event time).
+
+#### Watermarks
+
+A **watermark** is a mechanism to track the progress of event time through the system. It answers the question: "Have I received all events up to time T?"
+
+- The watermark is a timestamp that advances as events arrive
+- When the watermark passes time T, you can reasonably conclude that no more events with timestamp less than or equal to T will arrive
+- This triggers window closure — the window for time T is declared complete
+
+**The problem**: you can never be *sure* you have received all events for a window. Events may be buffered on another machine, delayed by network interruptions, or arriving from mobile devices that were offline.
+
+#### Handling Late Events (Stragglers)
+
+When events arrive after the watermark has passed their window:
+
+1. **Ignore the straggler**: acceptable if late events are a small percentage. Track dropped events as a metric; alert if the number grows.
+2. **Publish a correction**: emit an updated value for the window with the straggler included. May need to retract the previous output.
+
+**Allowed lateness configuration**: many frameworks let you configure how long after the watermark to keep a window open for late arrivals. After this grace period, late events are truly dropped.
+
+**Mobile device example**: an app buffers events locally while offline and sends them when a connection is available — possibly hours or days later. These appear as extremely delayed stragglers. The event timestamp should be the time of the user interaction (from the device clock), but device clocks cannot be trusted. Solution: log three timestamps — (1) event time on device clock, (2) send time on device clock, (3) receive time on server clock — and compute the device clock offset.
 
 **Windowing**: grouping events into time-based buckets for aggregation.
 - **Tumbling window**: fixed-size, non-overlapping (e.g., 1-minute windows)
@@ -171,10 +457,64 @@ These differ due to network delays, batching, and retries. Handling late events 
 - **Sliding window**: contains all events within last X minutes of *event time*
 - **Session window**: groups events by activity gap (inactivity closes the session)
 
-**Stream joins**:
-- **Stream-stream join**: two streams joined on common key within a time window
-- **Stream-table join (enrichment)**: events joined with slowly-changing table data
-- **Table-table join**: both tables maintained from streams; output is a materialized view
+### Stream Joins in Detail
+
+Stream joins are one of the trickiest parts of stream processing. There are three types, each with different requirements:
+
+#### Stream-Stream Join (Window Join)
+
+Two event streams are joined based on a common key within a time window.
+
+**Example — ad click attribution**: you have two streams: ad impressions and ad clicks. You want to match each click to the impression that caused it. A click must happen within 1 hour of the impression.
+
+```
+Stream A (impressions): (ad_id: 42, user: "alice", time: 10:00)
+Stream B (clicks):      (ad_id: 42, user: "alice", time: 10:23)
+→ Joined: impression 42 led to a click after 23 minutes
+```
+
+The stream processor must **maintain state for all events in the window**. For a 1-hour window, every impression from the last hour must be kept in memory (or on local disk). When a click arrives, the processor searches the impression state for a matching ad\_id. Similarly, when an impression arrives, it checks for already-arrived clicks. Events older than the window are garbage collected.
+
+#### Stream-Table Join (Enrichment Join)
+
+Each event in a stream is enriched with data from a slowly-changing table.
+
+**Example — enrich activity events with user profiles**: you have a stream of user activity events (page views, clicks) and you want to add the user's name, country, and account type from a user profile database.
+
+```
+Stream: (user_id: 123, action: "page_view", page: "/products")
+Table:  (user_id: 123, name: "Alice", country: "US", plan: "premium")
+→ Enriched: (user_id: 123, action: "page_view", name: "Alice", country: "US", ...)
+```
+
+The stream processor keeps a **local copy of the table** in memory or on local disk. This copy is kept up-to-date via CDC — changes to the user profile database are streamed as events to the processor. When an activity event arrives, the processor looks up the user in its local table copy. No remote database call needed at query time.
+
+#### Table-Table Join (Materialized View Maintenance)
+
+Both sides are tables derived from streams, and the output is a continuously updated materialized view.
+
+**Example — Twitter timeline cache**: when user A follows user B, add all of B's recent tweets to A's timeline cache. When B posts a new tweet, add it to the timeline of every one of B's followers. When A unfollows B, remove B's tweets from A's timeline.
+
+This requires maintaining two tables:
+- **Follows table** (from a follows/unfollows event stream): who follows whom
+- **Tweets table** (from a tweets event stream): recent tweets by each user
+
+The output — the timeline for each user — is a materialized view that is updated whenever either input table changes. This is essentially what Twitter's real-time fanout system does.
+
+### State Management in Stream Processors
+
+Stream processors need to maintain state for aggregations, joins, and windowing. How that state is managed and recovered after failures varies:
+
+| Framework | State Management Strategy |
+|-----------|--------------------------|
+| **Flink** | Periodically captures snapshots of operator state, writes them to durable storage (HDFS). On failure, restart from last snapshot. |
+| **Samza / Kafka Streams** | Replicate state changes by sending them to a dedicated Kafka topic with log compaction. New instance rebuilds state by replaying this topic. |
+| **VoltDB** | Redundant processing — each input message is processed on multiple nodes. State implicitly replicated. |
+| **Spark Streaming** | Microbatching — state is a function of the last microbatch's state + new input. Recompute from lineage on failure. |
+
+**When state can be rebuilt from input**: if the state is aggregations over a short window, simply replay the input events for that window. If the state is a local replica of a database (maintained via CDC), rebuild from the log-compacted change stream. No replication needed.
+
+**Trade-offs depend on infrastructure**: in some systems network delay is lower than disk latency, and network bandwidth is comparable to disk bandwidth. There is no universally ideal choice — the merits of local vs remote state shift as technology evolves.
 
 ### Fault Tolerance in Stream Processing
 
@@ -189,6 +529,40 @@ Batch processing is easy to make fault-tolerant (re-run the job). Stream process
 - Distributed transactions (expensive)
 - Effectively-once: process at-least-once but make effects idempotent
 
+#### The "Exactly-Once" Debate
+
+The term "exactly-once" is contentious in distributed systems. Strictly speaking, **truly exactly-once processing is impossible** in the face of failures. Consider: a stream processor reads a message, processes it, and writes the result to an output topic. If it crashes after writing the output but before committing the input offset, it will re-process the message after restart. The message was processed twice.
+
+What systems actually provide is **"effectively-once"** — the *effect* of processing is as if each message was processed exactly once, even though the actual processing may have happened more than once.
+
+There are two main approaches to achieving this:
+
+**Idempotent operations**: make the processing idempotent by including a unique ID (sequence number, event ID) with each output. The downstream system deduplicates: if it has already seen this ID, it ignores the duplicate. This works for writes to databases (use upsert with the event ID as key) and for producing to Kafka topics.
+
+**Transactional writes**: Kafka achieves exactly-once via two mechanisms working together:
+- **Idempotent producer**: each producer gets a unique ID. Kafka brokers track the sequence number per producer — if a duplicate arrives (due to retry), the broker silently discards it.
+- **Transactional writes**: a producer can atomically write to multiple partitions and commit the consumer offset in one transaction. Either all writes succeed or none do. This means "read from input topic, process, write to output topic, commit input offset" is an atomic operation.
+
+> **Key insight:** "Exactly-once" is about making the *outcome* indistinguishable from single processing, not about preventing duplicate execution. The distinction between "exactly-once" and "effectively-once" is mostly semantic, but understanding the mechanism matters for debugging.
+
+### Reprocessing for Evolution
+
+One of the most powerful features of log-based stream processing is the ability to **reprocess historical data** when your processing logic changes.
+
+**Why reprocess?**
+- **Bug fixes**: discovered a bug in your stream processor that has been producing incorrect derived data for weeks. Fix the bug, replay from the beginning.
+- **Schema evolution**: need to restructure derived data to support new features. Without reprocessing, schema evolution is limited to simple changes (adding optional fields). With reprocessing, you can restructure the entire dataset.
+- **New features**: want to build a new derived view (e.g., a new search index or ML feature) from the same source events.
+
+**Kappa architecture**: instead of maintaining separate batch and stream codepaths (lambda architecture), use a single stream processing system for everything. To reprocess historical data:
+1. Start a second instance of the stream processor
+2. Point it at the beginning of the Kafka log
+3. Let it rebuild output in a new location
+4. When it catches up, switch consumers to the new output
+5. Shut down the old processor and delete old output
+
+**Timestamp management during reprocessing**: when replaying historical events, processing time is meaningless. You must window by event time. If your stream processor used processing time for windowing, reprocessing will produce different results. This is why frameworks like Apache Beam provide APIs for expressing computations in terms of event time, regardless of when processing actually happens.
+
 ---
 
 ## Chapter 12 — The Future of Data Systems
@@ -197,13 +571,68 @@ Batch processing is easy to make fault-tolerant (re-run the job). Stream process
 
 The big architectural challenge: most organizations use many different data systems (OLTP DB, search index, cache, data warehouse, ML feature store...). How do you keep them in sync?
 
-**The problem with dual writes**: write to system A, then write to system B. If A succeeds but B fails → inconsistency. This is the core of the data integration problem.
+#### Reasoning About Dataflows
 
-**The solution: derive everything from one log**. Write only to one system (the system of record). Use CDC or event sourcing to derive all other systems from that log. The log is the single source of truth.
+When copies of the same data must be maintained in several storage systems, you need to be very clear about inputs and outputs: where is data written first, and which representations are derived from which sources?
 
-**Lambda Architecture**: run batch and stream processing in parallel. Batch layer recomputes from scratch periodically (accurate but slow). Speed layer handles recent data (fast but approximate). Serving layer merges both. Problem: two codepaths are hard to maintain.
+**The correct approach**: data is first written to a **system of record** database. Changes to that database are captured via CDC and applied to all derived systems (search index, cache, analytics) in the same order. The search index is entirely derived from the system of record, and therefore consistent with it. Writing to the database is the only way of supplying new input.
 
-**Kappa Architecture**: replace batch layer with stream processing. Process all data as streams; periodically reprocess historical data by replaying from Kafka. Simpler: one codepath.
+**The problem with dual writes**: if the application directly writes to both the database and the search index, two clients sending conflicting writes can see them processed in different orders by the two systems. Neither system is "in charge" of ordering — they make contradictory decisions and become permanently inconsistent.
+
+```
+Client A writes: user.name = "Alice"
+Client B writes: user.name = "Bob"
+
+Database processes: A then B → name = "Bob"
+Search index processes: B then A → name = "Alice"
+→ Permanently inconsistent!
+```
+
+**State machine replication principle**: if you funnel all user input through a single system that decides on an ordering for all writes, it becomes much easier to derive other representations by processing writes in the same order. Whether you use CDC or an event sourcing log is less important than the principle of deciding on a total order.
+
+#### Derived Data vs Distributed Transactions
+
+Both approaches aim to keep multiple data systems consistent, but by very different means:
+
+| Aspect | Distributed Transactions | Log-based Derived Data |
+|--------|------------------------|----------------------|
+| **Ordering mechanism** | Locks for mutual exclusion (2PL) | Log provides total order |
+| **Atomicity** | Atomic commit (2PC) | Deterministic retry + idempotence |
+| **Consistency model** | Linearizability — read your own writes | Eventual consistency by default |
+| **Failure behavior** | Abort if any participant fails — amplifies failures | Fault contained locally — consumer catches up when fixed |
+| **Performance** | Poor — lock contention, coordinator bottleneck | Good — async, loosely coupled |
+| **Cross-technology** | Requires standardized protocol (XA) — rarely works well | Event log is a simple interface any system can consume |
+
+> XA distributed transactions have poor fault tolerance and performance characteristics, which severely limit their usefulness. Log-based derived data is the most promising approach for integrating different data systems.
+
+The biggest difference: transaction systems provide **linearizability** (read your own writes), while async derived data systems do not by default. But the loose coupling and fault containment of log-based systems make them much more practical at scale.
+
+#### The Limits of Total Ordering
+
+Constructing a totally ordered event log is feasible for small systems (single-leader replication does exactly this). But at larger scale, four limitations emerge:
+
+1. **Single leader = throughput bottleneck**: all events must pass through one node that decides ordering. If event throughput exceeds a single machine's capacity, you must partition across machines — and the order of events across partitions is ambiguous.
+
+2. **Geographic distribution = separate leaders**: with servers in multiple datacenters, synchronous cross-datacenter coordination is too slow. Each datacenter has its own leader, implying undefined ordering between events from different datacenters.
+
+3. **Microservices = independent services**: each service and its durable state is an independent unit with no shared state. Events originating in different services have no defined order relative to each other.
+
+4. **Client-side state with offline operation**: apps that update state immediately on user input (without server round-trip) and work offline. Clients and servers see events in different orders.
+
+Total ordering is equivalent to consensus, and most consensus algorithms assume a single node can handle the full event stream. Scaling consensus across nodes in a geographically distributed setting remains an open research problem.
+
+#### Ordering Events to Capture Causality — Social Network Example
+
+When there is no causal link between events, the lack of total order doesn't matter. But causal dependencies can arise in subtle ways:
+
+**The breakup scenario**: two users were in a relationship but just broke up. One user removes the other as a friend, then sends a message to their remaining friends complaining about their ex-partner. The user's intention: the ex-partner should not see the rude message, since it was sent *after* the friend status was revoked.
+
+But if friendship status is stored in one place and messages in another, the ordering dependency between the unfriend event and the message-send event may be lost. A notification service processing the message-send event *before* the unfriend event would incorrectly send the notification to the ex-partner.
+
+The notifications are effectively a **join between the messages stream and the friend list** — and timing issues in that join cause the problem. Starting points for solutions include:
+- Logical timestamps can provide total ordering without coordination, but recipients must handle out-of-order events
+- Log the state the user saw before making a decision, give that event a unique identifier, and have later events reference it to record causal dependency
+- Conflict resolution algorithms can help maintain state but don't help with external side effects (like sending a notification)
 
 ### Unbundling the Database
 
@@ -216,33 +645,212 @@ Traditional databases are monolithic: storage, indexing, query processing, cachi
 - Caching: Redis, Memcached
 - Coordination: ZooKeeper
 
-Each component does one thing well. The dataflow graph connects them. This is the Unix philosophy applied to data infrastructure.
+Each component does one thing well. The dataflow graph connects them. **This is the Unix philosophy applied to data infrastructure.** Unix tools communicate through pipes (byte streams); unbundled data systems communicate through event logs.
 
-**Derived data**: most of these components store *derived* data (caches, indexes, materialized views). The source of truth is a small set of systems. Derived data can be re-created at any time from the source.
+#### The CREATE INDEX Analogy
+
+Think about what happens when you run `CREATE INDEX` in a relational database:
+1. Scan a consistent snapshot of the table
+2. Pick out field values being indexed, sort them
+3. Write the index
+4. Process the backlog of writes made since the snapshot
+5. Continue keeping the index up-to-date as new writes arrive
+
+This is remarkably similar to setting up a new CDC consumer. The database essentially **reprocesses the existing dataset** and derives the index as a new view onto existing data.
+
+**But CREATE INDEX is limited.** It picks columns and sorts them — that's it. For derived data that requires application logic, databases struggle:
+
+| Derivation Type | Transformation Required | Can a DB Do It? |
+|----------------|------------------------|-----------------|
+| Secondary index | Pick columns, sort by value | Yes — CREATE INDEX |
+| Full-text search index | NLP: language detection, stemming, lemmatization, synonym identification | Partially — basic features only |
+| ML model | Feature engineering, statistical analysis, domain-specific knowledge | No |
+| Custom cache | Application-specific aggregation, UI-specific formatting | No |
+
+#### Application Code as a Derivation Function
+
+When the derivation function is not a standard cookie-cutter operation like creating a secondary index, **custom code** is required. And this is where databases have historically been weak.
+
+Databases support triggers, stored procedures, and user-defined functions — but these are afterthoughts. They don't fit well with modern development practices: dependency management, version control, rolling upgrades, monitoring, or calls to external services. Deployment tools like Kubernetes are designed for running application code; databases are not.
+
+The solution: **separate application code from state management**. Stream processors run application code that transforms events from one form to another. The database stores state. Each does what it does best.
+
+#### The Write Path vs Read Path Framework
+
+Every data system can be understood through the lens of two paths:
+
+- **Write path** (eager evaluation): computation done at write time, precomputed and stored. Examples: updating a search index when a document changes, maintaining a materialized view.
+- **Read path** (lazy evaluation): computation done at read time, on demand. Examples: scanning documents for a search query (grep), computing an aggregation at query time.
+
+The **derived dataset is where write path and read path meet**. It represents a trade-off:
+
+```
+More work at write time ←→ Less work at read time
+
+  No index              Search index            Precomputed results
+  (all work at read)    (balanced)              (all work at write)
+  ← grep scan                                   → infinite storage needed
+```
+
+A full-text search index does work on both paths: writes update index entries for all terms in a document; reads search for query terms and apply Boolean logic. Without the index, reads do all the work (grep). You could precompute results for all possible queries, but that's infinite.
+
+**Caching common queries** shifts the boundary further toward the write path for popular queries, while uncommon queries still use the read path through the index.
+
+> **After 500 pages we have come full circle.** The Twitter celebrity example from Chapter 1 is exactly this trade-off: for ordinary users, precompute the timeline (write path). For celebrities with millions of followers, compute at read time (read path). The write-path/read-path boundary is drawn differently depending on the fanout.
+
+### Service-Oriented vs Dataflow Architecture
+
+The trendy microservices approach breaks functionality into services that communicate via synchronous network requests (REST APIs). Composing stream operators into dataflow systems has similar organizational benefits (loose coupling, independent teams) but a fundamentally different communication mechanism.
+
+| Aspect | Microservices (RPC) | Dataflow (Streams) |
+|--------|--------------------|--------------------|
+| Communication | Synchronous request/response | One-directional, asynchronous message streams |
+| Coupling | Temporal coupling — caller waits for response | Decoupled — producer doesn't wait for consumers |
+| Failure | If called service is down, caller fails too | Event log buffers messages; consumer catches up when fixed |
+| Performance | Network round-trip on every request | Local state, updated asynchronously |
+
+**Currency conversion example**: a customer purchases an item priced in one currency but pays in another.
+
+1. **Microservices approach**: the purchase processing code queries an exchange-rate service to get the current rate. Synchronous network request. If the service is down, the purchase fails.
+
+2. **Dataflow approach**: the purchase processing code subscribes to a stream of exchange rate updates and stores the current rate in a local database. When processing a purchase, it queries the local database. No network request needed.
+
+> **"The fastest and most reliable network request is no network request at all."** Instead of synchronous RPC, we now have a stream-table join between purchase events and exchange rate update events.
+
+The dataflow approach is faster and more robust. The join is time-dependent (if you reprocess historical purchases, you need the historical exchange rate), but both approaches must handle this.
 
 ### Correctness
 
 A key insight: **most databases don't actually guarantee end-to-end correctness**. They provide transactions within one service, but not across multiple services.
 
-**End-to-end argument**: the only way to be sure an operation succeeded is to check at the final destination, not just at intermediate steps. TCP checksums don't prevent corrupted data written to disk.
+#### The End-to-End Argument
+
+The **end-to-end argument** is one of the most important principles in systems design. It originates from a classic 1984 paper by Saltzer, Reed, and Clark: *"End-to-End Arguments in System Design."*
+
+The principle states: **functions placed at low levels of a system may be redundant or of little value when compared to the cost of providing them at that low level.** In other words, only the endpoints (the application) can fully implement certain guarantees — lower layers can help, but they cannot replace the need for end-to-end checking.
+
+**Example — file transfer**: TCP guarantees reliable delivery of bytes across the network. But TCP cannot guarantee that the file on the sender's disk was read correctly, or that the receiver wrote it to disk correctly. Only an end-to-end checksum (computed by the sender's application, verified by the receiver's application) truly guarantees the file was transferred correctly.
+
+**Applied to messaging**: a message broker may guarantee delivery (the message was received by the consumer). But it cannot guarantee that the consumer processed the message correctly, that the consumer's database write succeeded, or that the downstream effect was correct. Only application-level acknowledgment (the consumer confirms the final effect) is a true guarantee.
+
+**Applied to databases**: a database guarantees durability — it will not lose your data. But if your application has a bug that writes the wrong data, the database has durably saved *wrong data*. The database kept its promise (durable storage), but end-to-end correctness was not achieved. The guarantee must be checked at the application level.
+
+> **Key insight:** End-to-end correctness requires end-to-end verification. Each layer can contribute to reliability, but no intermediate layer can substitute for the application's own checks. This is why idempotency keys, application-level checksums, and result verification matter.
 
 **Idempotency**: make all operations idempotent so you can safely retry. Use unique operation IDs (idempotency keys) to deduplicate at the destination.
 
 **Constraints**: enforcing uniqueness or other invariants in distributed systems requires coordination. Approaches:
 - Synchronous coordination (linearizable): correct but slow
 - Async constraint checking: approximate, allow violations and compensate later
-- Apologies and compensation: sometimes it's OK to sometimes be wrong and fix it
+- Apologies and compensation: sometimes it is OK to sometimes be wrong and fix it
+
+#### Enforcing Constraints Without Coordination
+
+Full coordination (distributed transactions, consensus) is expensive and limits throughput. But there is a powerful trick: **if you can route all requests that might conflict to the same partition, you get serializability within that partition without any cross-partition coordination.**
+
+**Example — unique username registration**:
+
+```
+Step 1: Client sends username claim request to Kafka topic
+        (partitioned by username hash)
+
+Step 2: All requests for "alice" go to partition 7
+        All requests for "bob" go to partition 3
+
+Step 3: Single-threaded consumer per partition processes in order
+        First request for "alice" → approved
+        Second request for "alice" → rejected (already taken)
+
+Step 4: Client watches output stream for approval/rejection
+```
+
+Within that partition, processing is serial — no coordination needed. This scales to large request throughput by increasing partition count, since each partition is processed independently.
+
+**Multi-partition constraints**: for a purchase that debits one account and credits another (two different partitions), route the request as a single message to a Kafka topic partitioned by request ID. A stream processor reads the request, emits debit and credit instructions to the respective partitions, and uses the request ID for deduplication. No distributed transaction needed — the single durable message is the atomic unit.
+
+The limitation: cross-partition constraints (e.g., "total balance across all accounts must be non-negative") still require coordination.
+
+#### Auditing with Double-Entry Bookkeeping
+
+Since we accept that some data might be wrong (bugs, operational errors, hardware faults), we should **build systems that can detect and fix errors** rather than assuming errors never happen.
+
+**Immutable event logs** are central to this. If you store every event that ever happened, you can always re-derive the current state from scratch. If you discover a bug in your processing logic, you can fix the bug and replay the events to produce correct output. The events themselves are the ground truth.
+
+This is analogous to **double-entry bookkeeping** in accounting:
+
+| Accounting Principle | Data System Equivalent |
+|---------------------|----------------------|
+| Every transaction recorded as debit AND credit | Every state change recorded as an immutable event |
+| Debit and credit must balance | Derived state must be consistent with event log |
+| If they don't balance → error detected | If re-derivation produces different result → corruption detected |
+| Can trace to specific transaction | Can trace to specific event |
+| Centuries of proven practice | Emerging best practice |
+
+**Applied to data systems**: a well-designed system should make it possible to:
+- **Verify** derived data against the source of truth — re-derive and compare
+- **Detect** inconsistencies between different derived views
+- **Recover** from errors by replaying events with corrected logic
+- **Audit** the full history — every state change has provenance
+
+Event-based systems provide better auditability than traditional databases: user input is an immutable event, all state updates are derived from it, and the derivation is deterministic and repeatable.
+
+**Cryptographic auditing**: Merkle trees (trees of hashes) can efficiently prove that a record appears in a dataset. Certificate transparency uses this for TLS/SSL certificate validation. Similar techniques could be applied to data system integrity checking — continuously verifying that derived data matches its source.
+
+> **Key insight:** Rather than trying to prevent all errors (which is impossible), design systems that make errors detectable and recoverable. Immutable, append-only logs are the foundation: you can always go back and re-derive.
 
 ### Ethics and the Future
 
 Kleppmann ends with a rare ethical discussion for a technical book.
 
-**Predictive analytics**: using past behavior to predict future behavior. Used for credit scoring, parole decisions, ad targeting. Problems:
-- Self-fulfilling prophecies
-- Bias amplification (historical data encodes historical discrimination)
-- No accountability or appeal mechanism
+#### Toward Engineering Ethics
 
-**Privacy and surveillance**: behavioral tracking data is used to build detailed profiles. The word "data" sanitizes what is effectively "surveillance." Engineers are responsible for systems they build, even if they didn't intend them to be used harmfully.
+Kleppmann draws a striking parallel to other engineering disciplines. Structural engineers have professional codes of ethics and legal accountability — if a bridge collapses due to negligent design, the engineer can be held responsible. Doctors take the Hippocratic oath. Lawyers have bar associations and ethical standards.
+
+Software engineers have **no equivalent ethical framework**, despite building systems that affect billions of people. The ACM has a Software Engineering Code of Ethics, but it is rarely discussed, applied, or enforced in practice.
+
+**Predictive analytics**: using past behavior to predict future behavior. Used for credit scoring, parole decisions, ad targeting.
+
+The consequences are real:
+- An algorithm that denies someone a loan affects their ability to buy a home
+- Being flagged as a terrorism suspect affects freedom to travel
+- An insurance premium algorithm affects healthcare access
+- Systematically being excluded from jobs, travel, insurance, and financial services has been called "algorithmic prison"
+
+> In countries that respect human rights, the criminal justice system presumes innocence until proven guilty. Automated systems can exclude a person from society without proof of guilt and with little chance of appeal.
+
+#### Bias and Self-Fulfilling Prophecies
+
+Predictive systems create **feedback loops** that reinforce existing patterns:
+
+- If a neighborhood is flagged as "high crime," more police are sent there, more crimes are detected, confirming the prediction — the system amplifies the pattern it was trained on
+- A person with financial difficulties gets a low credit score, which prevents employment, which worsens finances, which further lowers the score — a downward spiral
+- Recommendation systems show people only opinions they already agree with, creating echo chambers where stereotypes and polarization breed
+
+**Bias amplification**: if historical data encodes historical discrimination (it usually does), the algorithm learns and amplifies that bias. A person's postal code or IP address correlates with race in segregated neighborhoods. The algorithm doesn't need an explicit "race" field to discriminate.
+
+> "Machine learning is like money laundering for bias."
+
+#### Privacy and Surveillance
+
+When a system stores data a user explicitly entered, the system serves the user. But when a user's activity is tracked as a side effect of other things they do, the relationship changes. The word **"data" sanitizes what is effectively "surveillance"** — detailed behavioral tracking used to build profiles, make predictions, and target advertising.
+
+Clicking "I agree" on a 50-page terms of service is not meaningful consent. Users cannot realistically understand what data is collected, how it is combined with other sources, and what decisions are made from it.
+
+#### Principles for Responsible Engineering
+
+Kleppmann argues for several principles:
+
+1. **Transparency in automated decision-making**: people should understand why an algorithm made a decision about them. "The model said so" is not an explanation. If a decision comes under judicial review, you must be able to explain how the algorithm reached it.
+
+2. **Meaningful consent**: users should understand what data is collected and how it is used — in plain language, not buried in legal documents.
+
+3. **Awareness of feedback loops**: think about the entire system (not just the computerized parts, but the people interacting with it). Does the system reinforce and amplify existing differences, or does it try to combat injustice?
+
+4. **Data as responsibility, not just asset**: organizations that collect data should view it as a **liability** (risk of breach, misuse, regulatory action), not just a business asset. Every dataset about people is a potential source of harm if misused or leaked.
+
+5. **Accountability**: when algorithmic decisions go wrong, someone must be accountable. Currently, the engineer who builds a discriminatory algorithm faces no professional consequences.
+
+> **Key insight:** Technical decisions are not ethically neutral. The choice of what data to collect, what to predict, and how to use predictions has real human consequences. Engineers should think about these consequences the same way structural engineers think about load-bearing calculations.
 
 ---
 
@@ -250,9 +858,9 @@ Kleppmann ends with a rare ethical discussion for a technical book.
 
 | Chapter | Key Ideas |
 |---------|-----------|
-| 10 | MapReduce, sort-merge joins, immutable batch processing, Spark |
-| 11 | Kafka log, CDC, event sourcing, windowing, exactly-once semantics |
-| 12 | Data integration, unbundling, end-to-end correctness, idempotency, ethics |
+| 10 | MapReduce, Unix philosophy, materialization overhead, sort-merge joins, dataflow engines (Spark/Flink/Tez) with three connection types, RDD lineage vs checkpointing, determinism requirement, BSP/Pregel graph processing and its limitations, high-level APIs with query optimizers (Catalyst), building search indexes as batch output |
+| 11 | JMS/AMQP vs log-based brokers (comparison table), Kafka log compaction, CDC, event sourcing, CEP pattern matching vs stream analytics, watermarks and straggler handling, windowing, stream joins (stream-stream, stream-table, table-table), state management strategies per framework, effectively-once semantics, reprocessing for evolution (Kappa architecture) |
+| 12 | Reasoning about dataflows (dual writes vs CDC), derived data vs distributed transactions, limits of total ordering, causality in social networks, unbundling databases (Unix philosophy for data), CREATE INDEX analogy, application code as derivation function, write path vs read path (Twitter full circle), service-oriented vs dataflow architecture, partitioned log constraints, double-entry bookkeeping for auditing, engineering ethics and feedback loops |
 
 **Key insight for the week:** Modern data systems are converging on a common architecture: an immutable log as the source of truth, with many derived views (databases, indexes, caches, ML models) kept in sync by processing that log. Batch and stream processing are different speeds of the same thing.
 
@@ -262,9 +870,9 @@ Kleppmann ends with a rare ethical discussion for a technical book.
 
 | Week | Part | Chapters | Theme |
 |------|------|----------|-------|
-| 1 | Foundations | 1–4 | What is a data system? Trade-offs in models, storage, encoding |
-| 2 | Distributed | 5–7 | How to spread data across machines and keep it consistent |
-| 3 | Distributed | 8–9 | Why distributed systems are hard and how to build reliable ones |
-| 4 | Derived | 10–12 | How to process data at scale, past and present |
+| 1 | Foundations | 1-4 | What is a data system? Trade-offs in models, storage, encoding |
+| 2 | Distributed | 5-7 | How to spread data across machines and keep it consistent |
+| 3 | Distributed | 8-9 | Why distributed systems are hard and how to build reliable ones |
+| 4 | Derived | 10-12 | How to process data at scale, past and present |
 
 **The overarching message of DDIA**: There is no silver bullet. Every design decision is a trade-off. The goal of a systems engineer is to understand those trade-offs deeply enough to make good choices for their specific context — not to chase trends or blindly apply best practices.

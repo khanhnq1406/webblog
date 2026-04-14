@@ -28,6 +28,64 @@ Every data system should aim for three properties:
 - *Simplicity* — easy to understand (reducing accidental complexity)
 - *Evolvability* — easy to change when requirements change
 
+### Faults vs. Failures
+
+An important distinction that the book draws early on:
+
+- A **fault** is when one component of the system deviates from its spec (e.g., a single disk dies, a process crashes).
+- A **failure** is when the system as a whole stops providing the required service to the user.
+
+The goal is **fault tolerance** — designing systems so that faults do not escalate into failures. You cannot prevent all faults, but you can build mechanisms that prevent them from cascading.
+
+Netflix takes this idea further with **Chaos Monkey**, a tool that deliberately injects faults into production (killing random instances, simulating network partitions). The reasoning: if you regularly exercise your fault-tolerance mechanisms, you gain confidence they actually work. It is better to trigger faults on your terms than to discover your recovery path is broken at 3 AM.
+
+> **Counterintuitively, the most reliable systems are not the ones that try to prevent all faults — they are the ones that expect and handle faults gracefully.**
+
+### Hardware Faults in Detail
+
+Hard disks have a mean time to failure (MTTF) of about **10 to 50 years**. On a storage cluster with 10,000 disks, you should expect on average **one disk to die per day**.
+
+The standard first response is **redundancy at the hardware level**:
+
+| Technique | What it protects against |
+|-----------|------------------------|
+| RAID configuration | Disk failures |
+| Dual power supplies | Power supply failure |
+| Hot-swappable CPUs | Processor failure |
+| Batteries and diesel generators | Datacenter power outage |
+
+Until recently, hardware redundancy was sufficient for most applications. But cloud platforms like **AWS** have changed the equation: it is fairly common for virtual machine instances to become unavailable without warning, because the platforms prioritize flexibility and elasticity over single-machine reliability.
+
+This drives a move toward **software fault-tolerance techniques** in addition to hardware redundancy. A system that tolerates entire machine failures also gains an operational advantage: you can patch one node at a time via a **rolling upgrade** without downtime of the entire system.
+
+### Software Errors in Detail
+
+Hardware faults tend to be **random and independent** — one machine's disk failing does not imply another's will. Software errors are fundamentally different: they are **systematic** and **correlated across nodes**, which makes them far more dangerous.
+
+| Software error type | Example |
+|-------------------|---------|
+| Bad-input crash | The leap second on **June 30, 2012** caused many applications to hang simultaneously due to a bug in the Linux kernel |
+| Resource exhaustion | A runaway process consuming all CPU time, memory, disk space, or network bandwidth |
+| Dependency failure | A service the system depends on slows down, becomes unresponsive, or returns corrupted responses |
+| Cascading failure | A small fault in one component triggers a fault in another, which triggers further faults |
+
+These bugs often lie dormant for a long time until triggered by unusual circumstances. The software makes assumptions about its environment — and those assumptions eventually stop being true.
+
+There is no single fix for systematic software faults. Helpful strategies include: careful thinking about assumptions and interactions, thorough testing, process isolation, crash-and-restart design, and continuous monitoring with runtime assertions (e.g., verifying that the number of incoming messages equals the number of outgoing messages).
+
+### Human Errors in Detail
+
+One study of large internet services found that **configuration errors by operators were the leading cause of outages**, whereas hardware faults played a role in only 10-25% of outages. Humans are the weakest link.
+
+The book proposes a layered defense:
+
+1. **Design for minimal error surface** — well-designed APIs and admin interfaces that make it easy to do the right thing and hard to do the wrong thing. But not too restrictive, or people will work around them.
+2. **Sandbox environments** — fully featured non-production environments where people can explore and experiment safely using real data, without affecting real users.
+3. **Thorough testing** — unit tests, integration tests, manual tests. Automated testing is especially valuable for covering corner cases that rarely arise in normal operation.
+4. **Quick recovery** — make it fast to roll back configuration changes. Roll out new code **gradually** so unexpected bugs affect only a small subset of users. Provide tools to recompute data if the old computation was incorrect.
+5. **Monitoring and telemetry** — performance metrics and error rates that show early warning signals and allow checking whether assumptions or constraints are being violated. (The book draws an analogy to rocket telemetry — once launched, telemetry is essential for tracking what is happening.)
+6. **Good management practices and training** — beyond the scope of the book but critically important.
+
 ### Describing Performance
 
 Two important ways to measure performance:
@@ -35,12 +93,85 @@ Two important ways to measure performance:
 - **Throughput** — number of records processed per second (important for batch jobs)
 - **Response time** — time between sending a request and receiving a response (important for online systems)
 
+#### Latency vs. Response Time
+
+These terms are often used interchangeably, but they are distinct:
+
+- **Response time** is what the client sees: the actual **service time** plus **network delays** plus **queueing delays**.
+- **Latency** is specifically the duration a request is **waiting to be handled** — during which it is latent, awaiting service.
+
+Even making the same request repeatedly yields different response times each time. Sources of variation include:
+
+- Context switches to background processes
+- Loss of a network packet and TCP retransmission
+- Garbage collection pauses
+- Page faults forcing reads from disk
+- Mechanical vibrations in the server rack
+
 Don't use averages. Use **percentiles**:
 - `p50` (median) — half of requests are faster than this
 - `p95`, `p99`, `p999` — tail latencies, critical for user experience
 - Amazon found that a 100ms increase in response time reduces sales by 1%
 
 > **Tail latency matters because your slowest users are often your most valuable ones** — they have the most data on their accounts.
+
+#### Tail Latency Amplification
+
+High percentiles become especially important in backend services that are called **multiple times** as part of serving a single end-user request. Even if calls are made in parallel, the overall request still waits for the **slowest** of the parallel calls to complete.
+
+It takes just **one slow backend call** to make the entire end-user request slow. Even if only a small percentage of individual backend calls are slow, the probability of hitting at least one slow call **increases** with the number of backend services involved. This is known as **tail latency amplification**.
+
+Example: if each of 5 backend calls has a 1% chance of being slow, the probability that the end-user request sees at least one slow call is roughly 5%. At 100 backend calls, it becomes nearly certain.
+
+#### Calculating Percentiles Efficiently
+
+Keeping a sorted list and re-sorting every minute is the naive approach. Efficient algorithms for approximating percentiles at minimal CPU and memory cost include:
+
+- **Forward decay** — weighted sampling that prioritizes recent data
+- **t-digest** — a data structure that provides accurate estimates at extreme percentiles
+- **HdrHistogram** — a fixed-memory histogram with configurable precision
+
+> **Averaging percentiles is mathematically meaningless.** If you compute p99 on each of 10 servers and average them, you do not get the overall p99. The correct approach is to aggregate the underlying histograms and then compute the percentile from the combined distribution.
+
+### SLOs and SLAs
+
+Percentiles are the foundation for two important concepts around service guarantees:
+
+**Service Level Objectives (SLOs)** are internal performance targets. For example: "p99 latency must be below 200ms" or "99.9% of requests must succeed." These are goals your team tracks against and alerts on.
+
+**Service Level Agreements (SLAs)** are contracts with external customers, often with consequences (refund, service credits) if they are violated. For example: "99.95% monthly uptime or customer receives 10% credit."
+
+SLAs are typically **less ambitious** than SLOs. If your internal target (SLO) is 99.99% uptime, your contract (SLA) might promise only 99.9%. This gives you a buffer — you want to catch and fix problems before they become SLA violations with financial consequences.
+
+### Describing Load: The Twitter Example
+
+Load parameters are specific to your system. The book uses Twitter (circa 2012) as a key case study. Twitter had two main operations:
+
+- **Post tweet**: a user publishes a new tweet (avg ~4,600/sec, peak ~12,000/sec)
+- **Home timeline**: a user views their feed of tweets from people they follow (~300,000 reads/sec)
+
+The scaling challenge is that home timeline reads vastly outnumber tweet writes, and each read requires assembling tweets from potentially hundreds of followed users.
+
+**Approach 1 — Query on read (fan-out on read)**: When a user opens their home timeline, query the tweets table and join with the follows table to find all relevant tweets. Simple to implement, but expensive at 300K requests/sec. Each read does a large join.
+
+```sql
+SELECT tweets.*, users.*
+FROM tweets
+JOIN follows ON tweets.sender_id = follows.followee_id
+WHERE follows.follower_id = current_user
+ORDER BY tweets.timestamp DESC
+LIMIT 100;
+```
+
+**Approach 2 — Fan-out on write**: Maintain a cache (like a mailbox) for each user's home timeline. When a user posts a tweet, look up all their followers and insert the tweet into each follower's timeline cache. Reads are now trivially fast — just read the precomputed cache.
+
+Twitter initially used approach 1, then moved to approach 2. The fan-out on write approach shifts the work to write time, which is acceptable when you have 4,600 writes/sec but 300,000 reads/sec.
+
+**The problem: celebrities.** A user with 30 million followers means one tweet triggers 30 million writes. This is too expensive for fan-out on write.
+
+**Twitter's solution: a hybrid.** Fan-out on write for most users, but for accounts with millions of followers (celebrities), their tweets are fetched on read and merged with the precomputed timeline. This is a key example of how understanding your specific load parameters drives architectural decisions.
+
+> **The architecture that works for your system depends on your specific load parameters. There is no generic one-size-fits-all scalable architecture.**
 
 ### Approaches for Coping with Load
 
@@ -50,19 +181,61 @@ Don't use averages. Use **percentiles**:
 
 There is no one-size-fits-all architecture. The right design depends on your specific load parameters.
 
-### Reliability: What Goes Wrong
+### Maintainability in Depth
 
-| Category | Examples |
-|----------|----------|
-| Hardware faults | Disk crash, RAM failure, power outage |
-| Software errors | Bugs, runaway processes, dependency failures |
-| Human errors | Misconfiguration (the leading cause of outages) |
+The majority of the cost of software is not in its initial development, but in its **ongoing maintenance** — fixing bugs, keeping systems operational, investigating failures, adapting to new platforms, repaying technical debt, and adding new features.
 
-To deal with human errors: design for minimal error surface, decouple production from experimentation, allow easy rollback, monitor with metrics and alerts.
+#### Operability: Making Life Easy for Operations
+
+Good operations teams are responsible for:
+
+- Monitoring system health and quickly restoring service
+- Tracking down causes of problems (failures, degraded performance)
+- Keeping software and platforms up to date, including security patches
+- Capacity planning — anticipating future problems before they occur
+- Establishing good practices for deployment and configuration management
+- Maintaining system security as configuration changes are made
+- Preserving organizational knowledge as people come and go
+- Defining processes that keep the production environment stable
+
+Good operability means making routine tasks easy so the operations team can focus on high-value activities.
+
+#### Simplicity: Managing Complexity
+
+A software project mired in complexity is sometimes described as a **big ball of mud**. Symptoms include: explosion of the state space, tight coupling, tangled dependencies, inconsistent naming, performance hacks, and special-casing.
+
+The key distinction is between **essential complexity** (inherent in the problem being solved) and **accidental complexity** (arising only from the implementation). The best tool for removing accidental complexity is **abstraction** — hiding implementation detail behind a clean facade. Examples: high-level programming languages abstract away machine code; SQL abstracts away on-disk data structures and concurrency.
+
+#### Evolvability: Making Change Easy
+
+Agile working patterns provide a framework for adapting to change at the code level (TDD, refactoring). But the book asks: how do you apply the same idea at the **data system level**? How would you "refactor" Twitter's home timeline architecture from approach 1 to approach 2?
+
+The ease with which you can modify a data system is closely linked to its simplicity and abstractions. The book uses the term **evolvability** to refer to agility at the data system level.
+
+### Reliability: What Goes Wrong (Summary)
+
+| Category | Examples | Key Insight |
+|----------|----------|-------------|
+| Hardware faults | Disk crash (MTTF 10-50yr), RAM failure, power outage | Random and independent; redundancy helps |
+| Software errors | Leap second bug, runaway processes, cascading failures | Systematic and correlated; much harder to handle |
+| Human errors | Misconfiguration (leading cause of outages) | Defense in depth: sandbox, gradual rollout, rollback, monitoring |
 
 ---
 
 ## Chapter 2 — Data Models and Query Languages
+
+### Layered Data Models
+
+Most applications are built by layering one data model on top of another. Each layer hides the complexity of the one below:
+
+| Layer | Representation |
+|-------|---------------|
+| 1. Application | Objects, data structures, APIs specific to your application |
+| 2. Data model | JSON/XML documents, relational tables, or graph vertices/edges |
+| 3. Storage | Bytes in memory, on disk, or on a network (indexes, column formats, etc.) |
+| 4. Hardware | Electrical currents, pulses of light, magnetic fields |
+
+Each layer provides a clean abstraction that allows different groups of people — database engineers and application developers, for example — to work together effectively.
 
 ### The Dominant Models
 
@@ -71,6 +244,31 @@ To deal with human errors: design for minimal error surface, decouple production
 **Document model** (MongoDB, CouchDB): Data stored as self-contained JSON-like documents. Best when data has a document-like structure with one-to-many relationships from a central entity.
 
 **Graph model** (Neo4j, Datomic): Data stored as vertices and edges. Best when anything can be related to anything else.
+
+### Many-to-One and Many-to-Many Relationships
+
+A subtle but important design question: should you store human-readable text or an ID?
+
+In the LinkedIn resume example, `region_id` and `industry_id` are stored as IDs rather than strings like "Greater Seattle Area" or "Philanthropy". The advantages of IDs:
+
+- **Consistent style and spelling** across all profiles
+- **Single point of update** — if a city name changes, you update one place
+- **Localization** — standardized lists can be translated to other languages
+- **Better search** — the ID can encode hierarchical relationships (Seattle is in Washington)
+
+> **The advantage of using an ID is that because it has no meaning to humans, it never needs to change.** Anything meaningful to humans may need to change, and if that information is duplicated, all copies need updating — risking inconsistency. Removing such duplication is the key idea behind **normalization**.
+
+But normalization requires **many-to-one relationships** (many people live in one region), which don't fit naturally into the document model. As features are added, data tends to become more interconnected. The LinkedIn example illustrates this: organizations and schools start as strings, but eventually become entities with their own pages, logos, and news feeds — introducing **many-to-many relationships**.
+
+### A Brief History: From IMS to CODASYL to Relational
+
+The most popular database for business data processing in the 1970s was IBM's **Information Management System (IMS)**, originally developed for stock-keeping in the **Apollo space program** and first commercially released in **1968**. IMS is still in use today, running on IBM mainframes. It used the **hierarchical model**, which has remarkable similarities to the JSON model used by modern document databases — both represent data as trees of nested records.
+
+Like document databases today, IMS worked well for one-to-many relationships but made many-to-many relationships difficult and did not support joins. The problems developers faced with IMS in the 1960s and 70s are very much like the problems developers face with document databases today.
+
+The **CODASYL model** (network model) was the main challenger. A record could have multiple parents (unlike hierarchical, which was strictly tree-shaped). This allowed many-to-many relationships. The catch: to access a record, you had to follow a chain of pointers called an **access path** — like navigating an n-dimensional data space.
+
+The **relational model** won because it decoupled the query from the physical storage. With SQL, you declare what data you want and the query optimizer figures out which indexes and access paths to use. If you need a new query pattern, you can add a new index without rewriting application code.
 
 ### Relational vs. Document: The Trade-offs
 
@@ -82,6 +280,26 @@ To deal with human errors: design for minimal error surface, decouple production
 | Many-to-many | Natural via foreign keys | Requires denormalization or joins |
 
 The **object-relational mismatch**: application code uses objects/classes, but relational databases use tables. ORMs reduce the friction but don't eliminate it.
+
+### Schema-on-Read vs. Schema-on-Write
+
+The book draws a useful analogy: **schema-on-write** (relational) is like **static type checking** in a programming language — the database rejects data that does not match the schema at write time. **Schema-on-read** (document) is like **dynamic type checking** — the structure is implicit, and the application interprets the data at read time.
+
+Neither is universally better:
+- Schema-on-write is useful when all records are expected to have the same structure and you want the database to enforce consistency
+- Schema-on-read is advantageous when different records have different structures, or when the structure is determined by external systems you do not control (e.g., data from third-party APIs)
+
+Changing a schema-on-write schema requires an `ALTER TABLE` migration. Changing a schema-on-read schema means updating your application code to handle both the old and new formats — similar to maintaining backward compatibility in encoding formats (Chapter 4).
+
+### Document and Relational Convergence
+
+An important trend: the document and relational models are converging.
+
+- **PostgreSQL** (since 9.2+), **MySQL** (since 5.7), and **Oracle** all support JSON columns with the ability to index and query inside JSON documents
+- **RethinkDB** supports relational-like joins in its query language, despite being a document database
+- **MongoDB** added support for the `$lookup` aggregation stage (essentially a left outer join) in version 3.2
+
+The practical consequence: the choice between relational and document is no longer as stark. If your application needs mostly document-like data with occasional joins, a relational database with good JSON support may be the sweet spot. The models are becoming increasingly similar in capability.
 
 ### Query Languages
 
@@ -107,11 +325,145 @@ db.observations.mapReduce(
 
 Two main graph models:
 
-**Property graphs** (Neo4j): Vertices have IDs, properties (key-value), and labels. Edges have IDs, labels, direction, and properties. Very flexible.
+#### Property Graphs (Neo4j) in Detail
 
-**Triple-stores / SPARQL**: Data stored as (subject, predicate, object) triples. `(Lucy, bornIn, Idaho)`. Good for semantic web and knowledge graphs.
+In the property graph model, each **vertex** consists of:
+- A unique identifier
+- A set of outgoing edges
+- A set of incoming edges
+- A collection of properties (key-value pairs)
 
-**Cypher** is the query language for property graphs — a declarative graph pattern matching language.
+Each **edge** consists of:
+- A unique identifier
+- The **tail vertex** (where the edge starts)
+- The **head vertex** (where the edge ends)
+- A **label** describing the kind of relationship
+- A collection of properties (key-value pairs)
+
+You can model a property graph in relational tables:
+
+```sql
+CREATE TABLE vertices (
+    vertex_id   integer PRIMARY KEY,
+    properties  json
+);
+
+CREATE TABLE edges (
+    edge_id     integer PRIMARY KEY,
+    tail_vertex integer REFERENCES vertices (vertex_id),
+    head_vertex integer REFERENCES vertices (vertex_id),
+    label       text,
+    properties  json
+);
+
+CREATE INDEX edges_tails ON edges (tail_vertex);
+CREATE INDEX edges_heads ON edges (head_vertex);
+```
+
+Key characteristics:
+1. **Any vertex can have an edge to any other vertex** — no schema restricts which kinds of things can be associated
+2. Given any vertex, you can efficiently find both incoming and outgoing edges (hence indexes on both columns)
+3. By using different **labels** for different relationships, you store several kinds of information in a single graph
+
+#### Cypher Query Language
+
+Cypher uses an arrow notation to describe graph patterns:
+
+```
+CREATE
+  (NAmerica:Location {name:'North America', type:'continent'}),
+  (USA:Location      {name:'United States', type:'country'}),
+  (Idaho:Location    {name:'Idaho',         type:'state'}),
+  (Lucy:Person       {name:'Lucy'}),
+  (Idaho) -[:WITHIN]->  (USA)  -[:WITHIN]-> (NAmerica),
+  (Lucy)  -[:BORN_IN]-> (Idaho)
+```
+
+The notation `(Idaho) -[:WITHIN]-> (USA)` creates an edge labeled WITHIN with Idaho as the tail node and USA as the head node.
+
+A powerful query — find people who emigrated from the US to Europe:
+
+```
+MATCH
+  (person) -[:BORN_IN]->  () -[:WITHIN*0..]-> (us:Location {name:'United States'}),
+  (person) -[:LIVES_IN]-> () -[:WITHIN*0..]-> (eu:Location {name:'Europe'})
+RETURN person.name
+```
+
+The notation `:WITHIN*0..` means "follow zero or more WITHIN edges" — like the `*` operator in a regular expression. This variable-length traversal is what makes graph queries so powerful for hierarchical data.
+
+The same query in SQL requires a **recursive common table expression** (WITH RECURSIVE) — **29 lines** compared to Cypher's **4 lines**. This demonstrates that different data models are designed for different use cases.
+
+#### Triple-Stores and SPARQL
+
+In a triple-store, all information is stored as **(subject, predicate, object)** triples:
+
+- If the object is a **primitive value**, the triple describes a property: `(lucy, age, 33)`
+- If the object is **another vertex**, the triple describes an edge: `(lucy, marriedTo, alain)`
+
+The **Turtle** notation provides a readable format:
+
+```
+@prefix : <urn:example:>.
+_:lucy     a :Person;   :name "Lucy";          :bornIn _:idaho.
+_:idaho    a :Location; :name "Idaho";         :type "state";   :within _:usa.
+_:usa      a :Location; :name "United States"; :type "country"; :within _:namerica.
+_:namerica a :Location; :name "North America"; :type "continent".
+```
+
+**The semantic web** was the original motivation for triple-stores — the vision of websites publishing machine-readable data via the Resource Description Framework (RDF) to create an internet-wide "database of everything." The semantic web was overhyped in the early 2000s and has not materialized in practice. However, triples remain a useful internal data model for applications.
+
+**SPARQL** (pronounced "sparkle") is a query language for RDF triple-stores. The same emigration query in SPARQL:
+
+```
+PREFIX : <urn:example:>
+SELECT ?personName WHERE {
+  ?person :name ?personName.
+  ?person :bornIn  / :within* / :name "United States".
+  ?person :livesIn / :within* / :name "Europe".
+}
+```
+
+Variables in SPARQL start with `?`. The syntax `/ :within*` means "follow zero or more :within edges" — directly analogous to Cypher's `:WITHIN*0..`.
+
+### Datalog
+
+Datalog is a declarative logic programming language that predates SQL and serves as the theoretical foundation for several later query languages. It is worth understanding because it approaches data querying from a fundamentally different angle.
+
+In Datalog, data is modeled as **predicates** (facts):
+
+```
+name(namerica, 'North America').
+type(namerica, continent).
+within(usa, namerica).
+within(idaho, usa).
+name(lucy, 'Lucy').
+born_in(lucy, idaho).
+```
+
+Queries are expressed as **rules** — you derive new predicates from existing ones:
+
+```
+/* A person lives in location if they were born there... */
+lives_in(Person, Location) :- born_in(Person, Location).
+
+/* ...or if they were born somewhere within that location */
+lives_in(Person, Location) :- born_in(Person, BornIn),
+                               within(BornIn, Location).
+
+/* Recursive: within is transitive */
+within(X, Y) :- within(X, Z), within(Z, Y).
+
+/* Query: who lives in North America? */
+?- lives_in(Person, namerica).
+```
+
+The key strengths of Datalog:
+- **Recursive queries** are natural and concise (compare writing transitive closure in SQL)
+- Rules can be combined and reused, building complex queries from simple building blocks
+- Each rule is independently understandable
+
+Datalog is used in practice by **Datomic** (a database by Rich Hickey, creator of Clojure) and **Cascalog** (a Datalog implementation for querying large datasets in Hadoop). While not mainstream, it demonstrates that SQL is not the only way to write declarative queries, and it excels in scenarios involving recursive or graph-like traversals.
 
 ---
 
@@ -126,13 +478,26 @@ db_get() { grep "^$1," database | tail -n 1 | cut -d',' -f2; }
 ```
 Writes are O(1) (append). Reads are O(n) (scan the whole file). We need **indexes** to make reads faster.
 
-### Hash Indexes (Bitcask style)
+### Hash Indexes (Bitcask Style)
 
-Keep an in-memory hash map: key → byte offset in data file. Fast reads and writes, but:
+Keep an in-memory hash map: key to byte offset in data file. Fast reads and writes, but:
 - All keys must fit in RAM
 - Range queries are inefficient
 
-**Compaction**: merge log segments by discarding old values of overwritten keys. Run in background thread.
+This is essentially what **Bitcask** does — the default storage engine in **Riak**.
+
+#### Bitcask Implementation Details
+
+Bitcask is well suited for workloads where a key is updated frequently (e.g., counting video plays). It offers high-performance reads and writes subject to one constraint: all keys must fit in RAM.
+
+| Implementation detail | How Bitcask handles it |
+|----------------------|----------------------|
+| **Data integrity** | Checksums in each file, allowing corrupted parts of the log to be detected and ignored |
+| **Crash recovery** | Stores a **snapshot of each segment's hash map on disk**, which can be loaded into memory quickly instead of re-reading entire segment files |
+| **Deleting records** | Appends a special **tombstone** record; compaction discards previous values for that key |
+| **Concurrency** | Single writer thread; segment files are append-only and immutable, so they can be read concurrently by multiple threads |
+
+**Compaction**: merge log segments by discarding old values of overwritten keys. Run in background thread while serving reads from old segments, then atomically switch to the new merged segment.
 
 ### SSTables and LSM-Trees
 
@@ -148,14 +513,34 @@ Keep an in-memory hash map: key → byte offset in data file. Fast reads and wri
 
 Used by: LevelDB, RocksDB, Cassandra, HBase, Lucene.
 
+#### Compaction Strategies
+
+There are two main approaches to determining how SSTables are compacted and merged:
+
+| Strategy | Used by | How it works |
+|----------|---------|-------------|
+| **Size-tiered** | HBase, Cassandra | Newer and smaller SSTables are successively merged into older and larger SSTables |
+| **Leveled** | LevelDB, RocksDB, Cassandra | Key range is split into smaller SSTables; older data is moved into separate "levels"; compaction proceeds more incrementally using less disk space |
+
+Cassandra supports both strategies, allowing you to choose based on your workload.
+
 ### B-Trees
 
 The standard index in relational databases (PostgreSQL, MySQL, Oracle).
 
 - Fixed-size pages (~4KB), organized as a tree
 - Reads are O(log n), writes update in-place
-- **Write-ahead log (WAL)**: for crash recovery — every modification logged before applied
-- Branch factor of ~500 → 4-level tree handles up to 256TB
+- Branch factor of ~500 means a 4-level tree handles up to 256TB
+
+#### B-Tree Reliability and Concurrency
+
+B-trees overwrite pages on disk in place — fundamentally different from LSM-trees which only append. This creates two challenges:
+
+**Crash recovery:** If the database crashes mid-write (e.g., while splitting a page, which requires writing two child pages and updating the parent), you can end up with a corrupted index. Solution: **Write-ahead log (WAL)**, also called a redo log — an append-only file to which every B-tree modification is written **before** it is applied to the tree pages. After a crash, the WAL restores the B-tree to a consistent state.
+
+**Alternative to WAL:** Some databases like **LMDB** use a **copy-on-write** scheme instead. A modified page is written to a different location, and a new version of the parent pages is created pointing to the new location. This is also useful for concurrency control (snapshot isolation).
+
+**Concurrent access:** Multiple threads accessing a B-tree simultaneously may see the tree in an inconsistent state. This is typically handled with **latches** (lightweight locks). LSM-trees are simpler in this regard — they do all merging in the background without interfering with incoming queries.
 
 ### LSM vs. B-Trees
 
@@ -166,6 +551,50 @@ The standard index in relational databases (PostgreSQL, MySQL, Oracle).
 | Read speed | Slower (check multiple files) | Faster (one location) |
 | Space efficiency | Better (no fragmentation) | Worse (fragmentation) |
 | Predictability | Less (compaction spikes) | More |
+| Transaction isolation | Harder (keys in multiple segments) | Easier (key in exactly one place) |
+
+#### Write Amplification
+
+One write to the database results in **multiple writes to disk** over the database's lifetime — this is called **write amplification**. B-trees write data at least twice (once to the WAL, once to the tree page). LSM-trees rewrite data during compaction.
+
+Write amplification is of particular concern on **SSDs**, which can only overwrite blocks a limited number of times before wearing out. LSM-trees generally have **lower write amplification** than B-trees, though this depends on configuration and workload.
+
+### Secondary Indexes and Heap Files
+
+A **secondary index** is not unique — many rows may share the same key. The key in an index is what queries search for, but the value can be:
+
+- A **reference to a heap file** — the place where rows are stored in no particular order. Multiple secondary indexes can all point to the same heap file location, avoiding data duplication.
+- The **actual row data** — stored directly in the index.
+
+| Index type | What it stores | Example |
+|-----------|---------------|---------|
+| **Heap file + index** | Index points to data in a separate heap file | Default in many databases |
+| **Clustered index** | The index stores the complete row data | MySQL InnoDB primary key — secondary indexes refer to the primary key, not a heap file location |
+| **Covering index** (index with included columns) | Stores some columns within the index | Allows some queries to be answered from the index alone without touching the heap file |
+
+Clustered and covering indexes speed up reads but add overhead on writes and require extra effort to enforce transactional consistency due to data duplication.
+
+### Multi-Column Indexes
+
+Most of the indexes discussed so far map a single key to a value. But many queries need to search on multiple columns simultaneously.
+
+**Concatenated index**: the most common multi-column index. It combines multiple fields into one key by simply appending one column to another (like a phone book sorted by last name, then first name). The order of columns matters — a concatenated index on `(last_name, first_name)` is useless for queries that filter only by `first_name`.
+
+**Multi-dimensional indexes** are needed when you cannot reduce the query to a single sort order. The most important example is **spatial queries**:
+
+```sql
+-- Find all restaurants within 2km of a given latitude/longitude
+SELECT * FROM restaurants
+WHERE latitude  BETWEEN 51.49 AND 51.51
+  AND longitude BETWEEN -0.13 AND -0.11;
+```
+
+A standard B-tree index on latitude (or longitude) alone can narrow results to a band but still requires scanning all entries in that band. An **R-tree** is a specialized spatial index that can efficiently answer multi-dimensional range queries. R-trees are used by **PostGIS** (the spatial extension for PostgreSQL).
+
+**Full-text search indexes** use a different structure entirely: the **inverted index**. It maps each term (word) to a list of document IDs that contain that term. Full-text search engines like **Lucene** (used by Elasticsearch and Solr) extend this with:
+- **Fuzzy matching** — finding words within a certain edit distance (handling typos)
+- **Linguistic analysis** — stemming, synonym expansion, stop word removal
+- **Relevance ranking** — TF-IDF, BM25 scoring
 
 ### OLTP vs. OLAP
 
@@ -173,7 +602,29 @@ The standard index in relational databases (PostgreSQL, MySQL, Oracle).
 
 **OLAP** (Online Analytical Processing): scan millions of rows, compute aggregates. Batch/analytical. Examples: business intelligence, data warehouses.
 
-**Data warehouse**: separate read-optimized system for analytics, loaded from OLTP systems via ETL. Star schema (fact table + dimension tables) is common.
+**Data warehouse**: separate read-optimized system for analytics, loaded from OLTP systems via ETL.
+
+### Star Schema and Snowflake Schema
+
+The most common data warehouse schema is the **star schema** (also called dimensional modeling).
+
+At the center is the **fact table** — each row represents an event that occurred at a particular time (a purchase, a page view, a click). The fact table can be enormous: Apple, Walmart, and eBay each have **tens of petabytes** of transaction history, most of which is in fact tables.
+
+Other columns in the fact table are foreign key references to **dimension tables**, which represent the **who, what, where, when, how, and why** of the event.
+
+| Dimension | Example table | Example columns |
+|-----------|--------------|----------------|
+| What | dim_product | SKU, description, brand, category, package size |
+| Who | dim_customer | Name, birthday, demographic segments |
+| Where | dim_store | Address, city, state, square footage, services offered |
+| When | dim_date | Date, day of week, month, year, is_holiday |
+| How | dim_promotion | Promotion name, type, discount percentage |
+
+The name "star schema" comes from the visual shape: the fact table in the middle, surrounded by dimension tables radiating outward like rays of a star.
+
+A **snowflake schema** is a variation where dimensions are further broken down into **sub-dimensions** (e.g., separate tables for brands and product categories, referenced by dim_product). Snowflake schemas are more normalized, but star schemas are often preferred because they are simpler for analysts to work with.
+
+Fact tables are often very wide — over 100 columns, sometimes several hundred. Dimension tables can also be very wide, including all metadata that might be relevant for analysis.
 
 ### Column-Oriented Storage
 
@@ -182,11 +633,47 @@ OLAP queries typically read a few columns across many rows. Row-oriented storage
 **Column storage**: store all values for column 1 together, then all values for column 2, etc.
 
 Benefits:
-- Better compression (similar values together, bitmap encoding)
+- Better compression (similar values together)
 - Only read columns you need
 - Vectorized processing (CPU SIMD operations)
 
 Used by: Vertica, Parquet, ORC, Amazon Redshift.
+
+#### Column Compression in Detail
+
+**Bitmap encoding** is particularly effective for columns with **low cardinality** (few distinct values). For a column with *n* distinct values, create *n* separate bitmaps — one per distinct value, with one bit per row. The bit is 1 if the row has that value, 0 otherwise.
+
+If *n* is small (e.g., ~200 countries), the bitmaps are compact. If *n* is larger, most bitmaps will be sparse (mostly zeros), and **run-length encoding** compresses them dramatically.
+
+Bitmap indexes are powerful for combining predicates:
+- `WHERE product_sk IN (30, 68, 69)` — load three bitmaps, compute **bitwise OR**
+- `WHERE product_sk = 31 AND store_sk = 3` — load two bitmaps, compute **bitwise AND**
+
+This works because columns contain rows in the same order, so the *k*th bit in one column's bitmap corresponds to the same row as the *k*th bit in another column's bitmap.
+
+**Sort order dramatically affects compression.** If the primary sort column has few distinct values, after sorting it will have long runs of repeated values. Run-length encoding can then compress that column to a few kilobytes — even if the table has billions of rows. The compression effect is **strongest on the first sort key** and diminishes for subsequent sort keys.
+
+### Materialized Views and Data Cubes
+
+A **materialized view** is a precomputed query result that is stored on disk like a table. Unlike a virtual view (which re-runs the query each time), a materialized view caches the results and updates them when the underlying data changes. This trades write-time overhead (keeping the view up to date) for dramatically faster reads on common queries.
+
+A **data cube** (also called an OLAP cube) is a special case of a materialized view. It is a grid of aggregates grouped by different combinations of dimensions. For example, a retail data cube might have dimensions for date, product, and store, with each cell containing the total sales. You can then slice along any dimension (all products on a given date) or dice (specific product in a specific store on a specific date) very quickly.
+
+The trade-off: data cubes are extremely fast for the specific aggregate queries they cover, but they are **inflexible**. If you need an aggregate that was not pre-defined in the cube, you have to compute it from scratch. This is why most data warehouses keep the raw data alongside any materialized aggregates, preserving flexibility for ad-hoc queries.
+
+### Why In-Memory Databases Are Fast
+
+A common misconception: in-memory databases (Redis, Memcached, VoltDB) are fast simply because they avoid reading from disk. In reality, even disk-based databases keep frequently-used data in memory via the OS page cache.
+
+The real performance advantage of in-memory databases is that **they avoid the overhead of encoding data structures into a format suitable for writing to disk**. Disk-based storage engines must serialize data into pages, manage buffer pools, and handle on-disk layout constraints. In-memory databases can use the data structures directly as they exist in memory.
+
+This also enables data models that are difficult or impossible to implement efficiently with disk-based indexes:
+- **Redis** offers priority queues, sets, sorted sets, and HyperLogLog — data structures that map naturally to in-memory representations but would be awkward to implement as B-tree entries
+- **VoltDB** offers relational semantics but executed entirely in memory for predictable sub-millisecond latency
+
+Some in-memory databases (e.g., Redis with AOF, VoltDB) do write to disk for durability, but the disk is used only as an append-only log for recovery — not for reading. The performance comes from the in-memory data format, not from avoiding disk entirely.
+
+> **In-memory databases are faster not because they avoid disk reads, but because they avoid the overhead of encoding data into disk-writable formats.**
 
 ---
 
@@ -202,43 +689,134 @@ Applications change over time. New fields are added, old ones removed. You need 
 
 **Language-native serialization** (Java Serializable, Python pickle):
 - Tied to one language
-- Security concerns
+- Security concerns (arbitrary class instantiation)
 - Poor versioning support
 - **Avoid for anything long-lived**
 
 **JSON/XML/CSV**:
 - Human-readable, widely supported
-- No binary types (JSON numbers lose precision for large integers)
+- No binary types
 - No schema enforcement (unless add JSON Schema)
 - Verbose
 
-**Thrift and Protocol Buffers** (binary):
-- Require schema (`.thrift` / `.proto` file)
-- Field tags (numbers) identify fields — enables forward/backward compatibility
-- Compact encoding
-- Required vs optional fields handle schema evolution
+#### JSON Number Precision Problem
 
-**Avro** (binary, no field tags):
-- Schema embedded or reader/writer schema negotiated
-- Most compact
-- Excellent for Hadoop/data pipeline use cases
+JSON does not distinguish integers from floating-point numbers and does not specify precision. Integers greater than **2^53** cannot be exactly represented in an IEEE 754 double-precision floating-point number, so such numbers become inaccurate when parsed by languages that use floating-point (like JavaScript).
+
+Twitter encountered this problem with tweet IDs (64-bit numbers). Their API returns tweet IDs **twice**: once as a JSON number and once as a **decimal string**, to work around JavaScript's inability to correctly parse the number.
+
+Binary strings (sequences of bytes without character encoding) also have no native JSON representation. The workaround is **Base64 encoding**, which increases data size by 33%.
+
+#### MessagePack: Binary JSON
+
+MessagePack is a binary encoding for JSON that includes field names in the encoded data. For the record:
+
+```json
+{
+    "userName": "Martin",
+    "favoriteNumber": 1337,
+    "interests": ["daydreaming", "hacking"]
+}
+```
+
+The first byte `0x83` indicates an object (top four bits = `0x80`) with three fields (bottom four bits = `0x03`). Field names like "userName" are still included as strings in the binary data.
+
+Result: **66 bytes** — only slightly less than the 81 bytes of textual JSON (with whitespace removed). The space savings are minimal because field name strings are still present. This is why schema-based formats (Protobuf, Thrift, Avro) can do much better — they omit field names entirely.
+
+### Thrift and Protocol Buffers
+
+Both require a schema with numbered **field tags** that identify fields in the binary encoding:
+
+```
+// Thrift
+struct Person {
+  1: required string       userName,
+  2: optional i64          favoriteNumber,
+  3: optional list<string> interests
+}
+
+// Protocol Buffers
+message Person {
+    required string user_name       = 1;
+    optional int64  favorite_number = 2;
+    repeated string interests       = 3;
+}
+```
+
+#### Field Tags and Schema Evolution
+
+Field tags are **aliases for fields** — a compact way of identifying which field you are talking about without spelling out the name. Critical rules:
+
+- **You can change field names freely** — the encoded data never refers to field names, only tag numbers
+- **You cannot change a field's tag number** — that would make all existing encoded data invalid
+- **New fields must have new tag numbers** — old code ignores unknown tags (forward compatibility)
+- **You can only remove optional fields** — and never reuse their tag numbers
+- **required vs optional** makes no difference in the binary encoding — it is only a runtime check
+
+Protocol Buffers uses `repeated` as a third option alongside `required` and `optional`. A repeated field tag simply appears multiple times in the record. This allows changing an optional field into a repeated field: old code reading new data sees only the last element.
+
+### Avro in Depth: Writer's Schema and Reader's Schema
+
+Avro takes a fundamentally different approach from Protobuf and Thrift. It does not use field tags at all. Instead, it relies on the **writer's schema** and the **reader's schema**, which do not need to be identical — they just need to be compatible.
+
+When data is encoded, it uses the writer's schema (the schema that was current when the data was written). When data is decoded, the reader uses its own schema (the reader's schema, which may be a newer or older version). Avro's library resolves the differences between the two schemas at read time:
+
+- Fields that exist in the writer's schema but not in the reader's schema are ignored
+- Fields that exist in the reader's schema but not in the writer's schema must have a default value
+
+This means **the binary data contains no field identifiers at all** — just values, in the order defined by the writer's schema. The reader must know the writer's schema to decode the data. How does the reader obtain the writer's schema?
+
+| Context | How the writer's schema is shared |
+|---------|----------------------------------|
+| Large files (Hadoop) | Include the writer's schema once at the beginning of the file (e.g., Avro object container files) |
+| Database with individually written records | Store a schema version number with each record; look up the schema in a **schema registry** |
+| Network communication (Avro RPC) | Negotiate the schema during the connection handshake |
+
+This design makes Avro particularly well-suited for **Hadoop** use cases: a MapReduce job writes an output file with millions of records, and the writer's schema is included once at the top of the file. Each subsequent MapReduce job can read that file using its own (possibly newer) reader's schema, and Avro resolves the differences transparently.
+
+#### Avro Union Types and Null Handling
+
+Avro does not have `optional` or `required` markers like Protobuf and Thrift. Instead, it uses **union types** to express nullable fields:
+
+```
+record Person {
+    string               userName;
+    union { null, long } favoriteNumber = null;
+    array<string>        interests;
+}
+```
+
+The notation `union { null, long, string }` means a field can be null, a number, or a string. The default value must be of the type of the **first branch** of the union. So if you want `null` as the default, `null` must be the first branch.
+
+This is more verbose than having everything nullable by default, but it **prevents accidental nullability** — you must explicitly declare what can and cannot be null. This design helps prevent bugs by making null handling explicit.
 
 ### Schema Evolution Rules
 
 For **Protobuf/Thrift**:
-- Add new fields: give them new tag numbers (old code ignores unknown tags → forward compatible)
+- Add new fields: give them new tag numbers (old code ignores unknown tags -> forward compatible)
 - Remove fields: only remove optional fields, never reuse tag numbers
-- Change types: carefully, some are compatible (int32 → int64 ok)
+- Change types: carefully, some are compatible (int32 -> int64 ok)
+
+### The Merits of Schemas
+
+The book makes a strong case for binary encoding formats with schemas (Protobuf, Thrift, Avro) over textual formats like JSON:
+
+1. **More compact** — field names are not repeated in every record (replaced by tag numbers or omitted entirely in Avro), and values are encoded in binary rather than text
+2. **The schema is a form of documentation** — it is always up to date because the data cannot be decoded without it, unlike documentation that can go stale
+3. **Compatibility checking before deployment** — you can maintain a database of schemas and check that schema changes are forward and backward compatible before deploying any code. This catches breaking changes at build time rather than in production
+4. **Code generation for statically typed languages** — from a Protobuf or Thrift schema, you can generate data classes in Java, C++, Go, etc. This provides compile-time type checking when accessing fields, eliminating a class of runtime errors
+
+> **Schemas give you the best of both worlds: the safety of static types and the flexibility of schema evolution. They serve as documentation that is guaranteed to be accurate.**
 
 ### Modes of Dataflow
 
 Data flows between processes in three ways:
 
-**Databases**: writer encodes, reader decodes later. Future code may read data written by past code → backward compatibility needed.
+**Databases**: writer encodes, reader decodes later. Future code may read data written by past code -> backward compatibility needed.
 
-**Services (REST/RPC)**: client sends request, server sends response. Different services evolve independently → both forward and backward compatibility needed.
+**Services (REST/RPC)**: client sends request, server sends response. Different services evolve independently -> both forward and backward compatibility needed.
 
-**Message passing** (Kafka, RabbitMQ, actor model): producer → queue → consumer. Decoupled in time and space. Consumer may be running old code → forward compatibility needed.
+**Message passing** (Kafka, RabbitMQ, actor model): producer -> queue -> consumer. Decoupled in time and space. Consumer may be running old code -> forward compatibility needed.
 
 ### REST vs. RPC
 
@@ -249,7 +827,65 @@ Data flows between processes in three ways:
 | Error handling | HTTP status codes | Exception propagation |
 | Discoverability | HATEOAS | Usually not |
 
-RPC frameworks (gRPC, Finagle, Avro RPC) are useful for internal services. The key insight: **a network call is fundamentally different from a local function call** — it can fail or be slow in ways a local call cannot.
+#### SOAP vs. REST History
+
+**SOAP** is an XML-based protocol for making network API requests. It comes with a sprawling set of related standards known as **WS-*** that add various features. The API is described using **WSDL** (Web Services Description Language), which enables code generation for client stubs.
+
+Problems with SOAP:
+- WSDL is not designed to be human-readable
+- SOAP messages are too complex to construct manually
+- Interoperability between different vendors' implementations often causes problems
+- Languages not supported by SOAP vendors have difficulty integrating
+
+**REST** builds on the principles of HTTP — simple data formats, URLs for identifying resources, HTTP features for cache control and authentication. RESTful APIs favor simpler approaches with less code generation. **OpenAPI** (formerly Swagger) provides documentation and specification for RESTful APIs.
+
+SOAP is still used in many large enterprises but has fallen out of favor in smaller companies. REST is the predominant style for public APIs.
+
+#### RPC Fundamental Problems
+
+The RPC model tries to make network calls look like local function calls — an abstraction called **location transparency**. But a network call is fundamentally different:
+
+| Local function call | Network request |
+|-------------------|----------------|
+| Predictable: succeeds or fails based on parameters | Unpredictable: network problems are outside your control |
+| Returns a result, throws an exception, or never returns | May return **without a result** due to timeout — you don't know if the request got through |
+| No duplication concern | Retrying may cause the action to be performed **multiple times** unless you build **idempotency** into the protocol |
+| Consistent execution time | Wildly variable latency |
+| Can pass memory pointers efficiently | Must serialize all parameters into bytes |
+
+Historical RPC technologies that suffered from these problems: **CORBA** (excessively complex, no backward/forward compatibility), **Java RMI** (limited to Java), **DCOM** (limited to Microsoft platforms).
+
+Modern RPC frameworks (gRPC, Finagle, Rest.li) are more explicit about the difference between local and remote calls, using futures/promises for async operations and supporting streams.
+
+### Message Broker Advantages
+
+Using a **message broker** (RabbitMQ, Kafka, ActiveMQ) instead of direct RPC has several advantages:
+
+- **Buffer** if the recipient is unavailable or overloaded, improving system reliability
+- **Automatic redelivery** to a process that has crashed, preventing message loss
+- **Decouples sender from recipient** — sender doesn't need to know the IP address and port of the recipient
+- **One-to-many delivery** — one message can be sent to several recipients
+- **Logical decoupling** — sender just publishes messages and doesn't care who consumes them
+
+The communication is typically **one-way asynchronous**: the sender does not wait for a reply. If a response is needed, it is sent on a separate channel (reply queue).
+
+Message brokers don't enforce any particular data model — a message is just a sequence of bytes. If the encoding is backward and forward compatible, you have maximum flexibility to change publishers and consumers independently.
+
+### The Actor Model
+
+The **actor model** is a programming model for concurrency where logic is encapsulated in actors. Each actor has local state (not shared with other actors) and communicates by sending and receiving asynchronous messages. Message delivery is **not guaranteed** — messages may be lost in error scenarios.
+
+The actor model works well for distributed systems because it already assumes messages may be lost, creating **less mismatch between local and remote communication** compared to RPC's location transparency.
+
+**Distributed actor frameworks** integrate a message broker and the actor programming model into a single framework:
+
+| Framework | Language/Platform | Message encoding |
+|-----------|------------------|-----------------|
+| **Akka** | JVM (Scala, Java) | Configurable (Protobuf, custom) |
+| **Orleans** | .NET | Custom serialization |
+| **Erlang OTP** | Erlang/BEAM VM | Built-in term encoding |
+
+Even with actor frameworks, you still need to worry about **forward and backward compatibility** — messages may be sent from a node running the new version to a node running the old version, and vice versa.
 
 ---
 
@@ -257,9 +893,9 @@ RPC frameworks (gRPC, Finagle, Avro RPC) are useful for internal services. The k
 
 | Chapter | Key Ideas |
 |---------|-----------|
-| 1 | Reliability, scalability, maintainability. Use percentiles not averages. |
-| 2 | Relational vs document vs graph. Declarative vs imperative queries. |
-| 3 | LSM-trees vs B-trees. OLTP vs OLAP. Column storage for analytics. |
-| 4 | Schema evolution, binary encodings, forward/backward compatibility. |
+| 1 | Reliability (fault tolerance, not fault prevention), scalability (load parameters drive architecture — Twitter example), maintainability (operability, simplicity, evolvability). Hardware faults are random; software faults are correlated and worse. Human error is the leading cause of outages. Use percentiles not averages. Tail latency amplification. SLOs vs SLAs. |
+| 2 | Layered data models hide complexity. Relational vs document vs graph. IMS/CODASYL history parallels today's debates. Many-to-one requires normalization, which requires joins. Schema-on-read vs schema-on-write. Document and relational are converging. Property graphs (vertex/edge with properties). Cypher vs SQL recursive CTE (4 lines vs 29). Triple-stores, SPARQL, and the semantic web. Datalog for recursive queries. |
+| 3 | Hash indexes (Bitcask: checksums, hash map snapshots). LSM-trees vs B-trees. Compaction strategies (size-tiered vs leveled). Write amplification matters for SSDs. B-tree WAL and latches. Secondary indexes, heap files, clustered indexes. Star/snowflake schemas for analytics (fact tables with tens of petabytes). Column compression (bitmap encoding, run-length encoding, bitwise AND/OR). Sort order affects compression. In-memory databases avoid encoding overhead, not just disk reads. |
+| 4 | JSON number precision (2^53 limit, Twitter's workaround). MessagePack includes field names (minimal savings). Thrift/Protobuf field tags enable schema evolution. Avro union types for explicit null handling. SOAP vs REST history. RPC fundamental problems (cannot distinguish slow from dead, idempotency). Actor model (Akka, Orleans, Erlang OTP). Message broker advantages (buffering, redelivery, decoupling). |
 
 **Key insight for the week:** There is no universal "best" data system. Every choice (data model, storage engine, encoding format) involves trade-offs that depend on your specific access patterns and requirements.
