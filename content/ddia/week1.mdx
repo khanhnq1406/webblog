@@ -1,0 +1,265 @@
+---
+title: "Week 1 — Foundations of Data Systems"
+description: "Chapters 1–4: Reliability, Scalability, Maintainability, Data Models, Storage Engines, and Encoding"
+category: "ddia"
+tags: ["reliability", "scalability", "data-models", "storage-engines", "encoding"]
+date: "2026-04-14"
+---
+
+# Week 1 — Foundations of Data Systems
+
+**Chapters covered:** 1, 2, 3, 4  
+**Core question:** *What does it even mean to build a good data system?*
+
+---
+
+## Chapter 1 — Reliable, Scalable, and Maintainable Applications
+
+### The Three Goals
+
+Every data system should aim for three properties:
+
+**Reliability** — the system works correctly even in the face of hardware faults, software bugs, and human error. "Correctly" means: performing the right function, tolerating mistakes, meeting performance requirements, and preventing unauthorized access.
+
+**Scalability** — the system can handle increased load. Load is described by *load parameters* — requests per second, ratio of reads to writes, number of active users, cache hit rate, etc.
+
+**Maintainability** — people working on the system over time can do so productively. This breaks into:
+- *Operability* — easy to keep running smoothly
+- *Simplicity* — easy to understand (reducing accidental complexity)
+- *Evolvability* — easy to change when requirements change
+
+### Describing Performance
+
+Two important ways to measure performance:
+
+- **Throughput** — number of records processed per second (important for batch jobs)
+- **Response time** — time between sending a request and receiving a response (important for online systems)
+
+Don't use averages. Use **percentiles**:
+- `p50` (median) — half of requests are faster than this
+- `p95`, `p99`, `p999` — tail latencies, critical for user experience
+- Amazon found that a 100ms increase in response time reduces sales by 1%
+
+> **Tail latency matters because your slowest users are often your most valuable ones** — they have the most data on their accounts.
+
+### Approaches for Coping with Load
+
+- **Scaling up (vertical)** — more powerful machines; simpler but has limits
+- **Scaling out (horizontal)** — distribute load across more machines; more complexity
+- **Elastic scaling** — automatically add/remove resources based on load
+
+There is no one-size-fits-all architecture. The right design depends on your specific load parameters.
+
+### Reliability: What Goes Wrong
+
+| Category | Examples |
+|----------|----------|
+| Hardware faults | Disk crash, RAM failure, power outage |
+| Software errors | Bugs, runaway processes, dependency failures |
+| Human errors | Misconfiguration (the leading cause of outages) |
+
+To deal with human errors: design for minimal error surface, decouple production from experimentation, allow easy rollback, monitor with metrics and alerts.
+
+---
+
+## Chapter 2 — Data Models and Query Languages
+
+### The Dominant Models
+
+**Relational model** (SQL): Data organized in tables with rows and columns. Relationships expressed via foreign keys and joins. Best for interconnected data with many-to-many relationships.
+
+**Document model** (MongoDB, CouchDB): Data stored as self-contained JSON-like documents. Best when data has a document-like structure with one-to-many relationships from a central entity.
+
+**Graph model** (Neo4j, Datomic): Data stored as vertices and edges. Best when anything can be related to anything else.
+
+### Relational vs. Document: The Trade-offs
+
+| | Relational | Document |
+|--|------------|----------|
+| Schema enforcement | At write time | At read time (schema-on-read) |
+| Joins | Native, powerful | Manual, in application code |
+| Locality | Data spread across tables | Data co-located in one document |
+| Many-to-many | Natural via foreign keys | Requires denormalization or joins |
+
+The **object-relational mismatch**: application code uses objects/classes, but relational databases use tables. ORMs reduce the friction but don't eliminate it.
+
+### Query Languages
+
+**Declarative** (SQL, CSS): Specify *what* you want, not *how* to get it. The database optimizer figures out the best execution plan. Easier to parallelize.
+
+**Imperative** (MapReduce, most code): Specify *how* to compute the result step by step. More control but harder to optimize.
+
+```sql
+-- Declarative: the database chooses the join order
+SELECT * FROM animals WHERE family = 'Sharks';
+```
+
+```javascript
+// MapReduce: you control the steps
+db.observations.mapReduce(
+  function map() { if (this.family === "Sharks") emit(this.month, this.count); },
+  function reduce(key, values) { return Array.sum(values); },
+  { out: "monthly_sharks" }
+)
+```
+
+### Graph Data Models
+
+Two main graph models:
+
+**Property graphs** (Neo4j): Vertices have IDs, properties (key-value), and labels. Edges have IDs, labels, direction, and properties. Very flexible.
+
+**Triple-stores / SPARQL**: Data stored as (subject, predicate, object) triples. `(Lucy, bornIn, Idaho)`. Good for semantic web and knowledge graphs.
+
+**Cypher** is the query language for property graphs — a declarative graph pattern matching language.
+
+---
+
+## Chapter 3 — Storage and Retrieval
+
+### How Databases Store Data
+
+The simplest possible database:
+```bash
+db_set() { echo "$1,$2" >> database; }
+db_get() { grep "^$1," database | tail -n 1 | cut -d',' -f2; }
+```
+Writes are O(1) (append). Reads are O(n) (scan the whole file). We need **indexes** to make reads faster.
+
+### Hash Indexes (Bitcask style)
+
+Keep an in-memory hash map: key → byte offset in data file. Fast reads and writes, but:
+- All keys must fit in RAM
+- Range queries are inefficient
+
+**Compaction**: merge log segments by discarding old values of overwritten keys. Run in background thread.
+
+### SSTables and LSM-Trees
+
+**Sorted String Tables (SSTables)**: key-value pairs sorted by key within each segment. Advantages over hash indexes:
+- Merging is efficient (like merge sort)
+- No need to keep all keys in memory (sparse index works)
+- Range queries are efficient
+
+**Log-Structured Merge-Tree (LSM-Tree)**: the write path:
+1. Write to in-memory balanced tree (memtable)
+2. When memtable is large enough, flush to disk as SSTable
+3. Background compaction merges SSTables
+
+Used by: LevelDB, RocksDB, Cassandra, HBase, Lucene.
+
+### B-Trees
+
+The standard index in relational databases (PostgreSQL, MySQL, Oracle).
+
+- Fixed-size pages (~4KB), organized as a tree
+- Reads are O(log n), writes update in-place
+- **Write-ahead log (WAL)**: for crash recovery — every modification logged before applied
+- Branch factor of ~500 → 4-level tree handles up to 256TB
+
+### LSM vs. B-Trees
+
+| | LSM-Trees | B-Trees |
+|--|-----------|---------|
+| Write speed | Faster (sequential writes) | Slower (random writes) |
+| Write amplification | Lower overall | Higher |
+| Read speed | Slower (check multiple files) | Faster (one location) |
+| Space efficiency | Better (no fragmentation) | Worse (fragmentation) |
+| Predictability | Less (compaction spikes) | More |
+
+### OLTP vs. OLAP
+
+**OLTP** (Online Transaction Processing): small number of rows per query, accessed by key. Interactive, low-latency. Examples: user-facing applications.
+
+**OLAP** (Online Analytical Processing): scan millions of rows, compute aggregates. Batch/analytical. Examples: business intelligence, data warehouses.
+
+**Data warehouse**: separate read-optimized system for analytics, loaded from OLTP systems via ETL. Star schema (fact table + dimension tables) is common.
+
+### Column-Oriented Storage
+
+OLAP queries typically read a few columns across many rows. Row-oriented storage wastes I/O loading irrelevant columns.
+
+**Column storage**: store all values for column 1 together, then all values for column 2, etc.
+
+Benefits:
+- Better compression (similar values together, bitmap encoding)
+- Only read columns you need
+- Vectorized processing (CPU SIMD operations)
+
+Used by: Vertica, Parquet, ORC, Amazon Redshift.
+
+---
+
+## Chapter 4 — Encoding and Evolution
+
+### Why Encoding Matters
+
+Applications change over time. New fields are added, old ones removed. You need to be able to:
+- **Roll forward**: new code read old data (backward compatibility)
+- **Roll backward**: old code read new data (forward compatibility)
+
+### Encoding Formats Compared
+
+**Language-native serialization** (Java Serializable, Python pickle):
+- Tied to one language
+- Security concerns
+- Poor versioning support
+- **Avoid for anything long-lived**
+
+**JSON/XML/CSV**:
+- Human-readable, widely supported
+- No binary types (JSON numbers lose precision for large integers)
+- No schema enforcement (unless add JSON Schema)
+- Verbose
+
+**Thrift and Protocol Buffers** (binary):
+- Require schema (`.thrift` / `.proto` file)
+- Field tags (numbers) identify fields — enables forward/backward compatibility
+- Compact encoding
+- Required vs optional fields handle schema evolution
+
+**Avro** (binary, no field tags):
+- Schema embedded or reader/writer schema negotiated
+- Most compact
+- Excellent for Hadoop/data pipeline use cases
+
+### Schema Evolution Rules
+
+For **Protobuf/Thrift**:
+- Add new fields: give them new tag numbers (old code ignores unknown tags → forward compatible)
+- Remove fields: only remove optional fields, never reuse tag numbers
+- Change types: carefully, some are compatible (int32 → int64 ok)
+
+### Modes of Dataflow
+
+Data flows between processes in three ways:
+
+**Databases**: writer encodes, reader decodes later. Future code may read data written by past code → backward compatibility needed.
+
+**Services (REST/RPC)**: client sends request, server sends response. Different services evolve independently → both forward and backward compatibility needed.
+
+**Message passing** (Kafka, RabbitMQ, actor model): producer → queue → consumer. Decoupled in time and space. Consumer may be running old code → forward compatibility needed.
+
+### REST vs. RPC
+
+| | REST | RPC |
+|--|------|-----|
+| Abstraction | Network is visible | Pretends network is invisible |
+| Format | Any (usually JSON) | Binary (Protobuf, Thrift) |
+| Error handling | HTTP status codes | Exception propagation |
+| Discoverability | HATEOAS | Usually not |
+
+RPC frameworks (gRPC, Finagle, Avro RPC) are useful for internal services. The key insight: **a network call is fundamentally different from a local function call** — it can fail or be slow in ways a local call cannot.
+
+---
+
+## Week 1 Summary
+
+| Chapter | Key Ideas |
+|---------|-----------|
+| 1 | Reliability, scalability, maintainability. Use percentiles not averages. |
+| 2 | Relational vs document vs graph. Declarative vs imperative queries. |
+| 3 | LSM-trees vs B-trees. OLTP vs OLAP. Column storage for analytics. |
+| 4 | Schema evolution, binary encodings, forward/backward compatibility. |
+
+**Key insight for the week:** There is no universal "best" data system. Every choice (data model, storage engine, encoding format) involves trade-offs that depend on your specific access patterns and requirements.

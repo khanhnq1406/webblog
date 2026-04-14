@@ -1,0 +1,242 @@
+---
+title: "Week 2 — Replication, Partitioning & Transactions"
+description: "Chapters 5–7: Distributed replication strategies, data partitioning, and the true meaning of ACID transactions"
+category: "ddia"
+tags: ["replication", "partitioning", "transactions", "acid", "consistency", "distributed-systems"]
+date: "2026-04-14"
+---
+
+# Week 2 — Replication, Partitioning & Transactions
+
+**Chapters covered:** 5, 6, 7  
+**Core question:** *How do we spread data across multiple machines and keep it consistent?*
+
+---
+
+## Chapter 5 — Replication
+
+**Replication** = keeping a copy of the same data on multiple machines connected via a network.
+
+Why replicate?
+- Reduce latency (keep data geographically close to users)
+- Increase availability (if one machine fails, others serve)
+- Scale read throughput (multiple machines serving reads)
+
+### Single-Leader Replication
+
+The most common approach:
+
+1. One node is the **leader** (master/primary) — all writes go here
+2. Other nodes are **followers** (replicas/secondaries) — receive replication log from leader
+3. Clients can read from any follower
+
+**Synchronous replication**: leader waits for follower to confirm before reporting success. Guarantees follower is up to date, but one slow follower blocks all writes.
+
+**Asynchronous replication**: leader doesn't wait. Faster writes, but data can be lost if leader fails before replicating.
+
+**Semi-synchronous**: one follower is synchronous, others async. Common in practice.
+
+### Handling Node Outages
+
+**Follower failure (catch-up recovery)**: follower reconnects, requests all changes since its last known position in the replication log.
+
+**Leader failure (failover)**:
+1. Determine leader has failed (usually via timeout)
+2. Elect a new leader (most up-to-date follower)
+3. Reconfigure clients to send writes to new leader
+
+Failover pitfalls:
+- New leader may not have all writes from old leader → **data loss**
+- Split brain: two nodes both think they're leader → conflicting writes
+- Wrong timeout length: too short → unnecessary failovers, too long → long downtime
+
+### Replication Logs
+
+How the leader sends changes to followers:
+
+| Method | How | Problem |
+|--------|-----|---------|
+| Statement-based | Send SQL statements | Non-deterministic functions (NOW(), RAND()) |
+| WAL shipping | Send write-ahead log bytes | Tightly coupled to storage engine version |
+| Row-based (logical) | Send description of rows changed | Most widely used today |
+
+### Problems with Replication Lag
+
+Asynchronous replication means followers can be behind the leader. This causes **eventual consistency** — followers will *eventually* catch up, but may temporarily be inconsistent.
+
+**Read-your-own-writes (read-after-write consistency)**: user writes something, then reads it back — but reads from a lagging replica that doesn't have it yet. Fix: always read your own recent writes from the leader.
+
+**Monotonic reads**: user reads from replica A (recent data), then replica B (stale data) — appears to go back in time. Fix: user always reads from the same replica.
+
+**Consistent prefix reads**: if writes happen in causal order, reads should see them in the same order. Fix: causally related writes go to same partition.
+
+### Multi-Leader Replication
+
+Multiple nodes accept writes. Each leader replicates to others.
+
+Use cases:
+- Multi-datacenter operation (one leader per datacenter)
+- Offline-capable clients (your device is a leader, syncs when online)
+- Collaborative editing (Google Docs style)
+
+**Write conflicts** are the biggest challenge. Two users edit the same record simultaneously on different leaders — both writes are "valid" locally. Strategies:
+- **Avoid conflicts**: route all writes for a user to the same leader
+- **Last-write-wins (LWW)**: use timestamps, accept data loss
+- **Merge**: merge conflicting values (works for some data types, e.g., shopping cart)
+- **CRDTs**: data structures designed to merge automatically (Conflict-free Replicated Data Types)
+
+### Leaderless Replication
+
+Any replica accepts writes. Associated with Dynamo-style databases (Riak, Cassandra, Voldemort).
+
+**Quorum reads/writes**: with n replicas, write must succeed on w, read must query r, where `w + r > n`.
+- Typical: n=3, w=2, r=2
+- This guarantees at least one node you read from has the latest write
+
+**Sloppy quorums**: during network partition, accept writes even if can't reach w home replicas — write to any w available nodes. Better availability, weaker durability guarantee.
+
+**Version vectors**: track which value is newer when concurrent writes exist. Each replica maintains a counter per replica.
+
+---
+
+## Chapter 6 — Partitioning
+
+**Partitioning** (sharding) = splitting a large dataset across multiple nodes so each node holds a subset. Used when data is too large for one machine.
+
+Partitioning is usually combined with replication: each partition is stored on multiple nodes, but each node may store multiple partitions.
+
+### Partitioning Key-Value Data
+
+**By key range**: assign a contiguous range of keys to each partition (like a paper encyclopedia volume). Allows efficient range queries. Risk: hot spots if keys are accessed unevenly (e.g., timestamp keys → all writes go to "today's" partition).
+
+**By hash of key**: hash the key, assign hash ranges to partitions. Distributes load evenly. Destroys ability to do range queries efficiently.
+
+Cassandra uses a compromise: compound primary key, first part hashed (for partitioning), rest sorted within partition (for range queries).
+
+### Avoiding Hot Spots
+
+If one key is very popular (celebrity post), all traffic goes to one partition. Solutions:
+- Add random salt to key (spread writes, but reads must query all salted copies)
+- Use application logic to handle this specially
+
+### Secondary Indexes and Partitioning
+
+Secondary indexes don't map neatly to partitions:
+
+**Document-partitioned index (local index)**: each partition maintains its own secondary index for data it holds. Simple to write. Reading requires **scatter/gather** — query all partitions and merge results. Used by MongoDB, Riak, Elasticsearch.
+
+**Term-partitioned index (global index)**: the index itself is partitioned by indexed term. Reads efficient (query specific index partition). Writes slow (must update index partitions on multiple nodes). Used by DynamoDB.
+
+### Rebalancing Partitions
+
+When nodes are added or removed, partitions must move.
+
+**Bad approach: hash mod N** — when N changes, almost every key moves. Too expensive.
+
+**Fixed number of partitions**: create many more partitions than nodes (e.g., 1000 partitions for 10 nodes). When a node is added, steal a few partitions from each existing node. Partition count stays the same. Used by Riak, Elasticsearch, Couchbase.
+
+**Dynamic partitioning**: partitions split when they grow too large, merge when they shrink. Partition count adapts to data volume. Used by HBase, MongoDB.
+
+**Consistent hashing**: place nodes and keys on a virtual ring. Each key belongs to the nearest node clockwise. Adding/removing a node only affects adjacent keys.
+
+### Request Routing
+
+When a client wants to read/write a key, how does it know which node to contact?
+
+1. **Client-side routing**: client has the partition map, contacts the right node directly
+2. **Routing tier**: separate routing service (like ZooKeeper) directs requests
+3. **Gossip protocol**: all nodes know the partition map (Cassandra, Riak)
+
+---
+
+## Chapter 7 — Transactions
+
+**Transaction** = a group of reads and writes treated as one logical unit. Either all succeed (commit) or all fail (abort/rollback).
+
+Transactions simplify error handling — you don't need to worry about partial failures.
+
+### ACID
+
+The gold standard of transaction guarantees:
+
+| Letter | Stands for | What it means |
+|--------|-----------|---------------|
+| A | **Atomicity** | All-or-nothing: if any write fails, all writes in the transaction are rolled back |
+| C | **Consistency** | The application's invariants are preserved (actually an application-level property, not a DB property) |
+| I | **Isolation** | Concurrently executing transactions don't interfere with each other |
+| D | **Durability** | Once committed, data won't be lost even if the system crashes |
+
+> **Important:** "Consistency" in ACID is different from "consistency" in distributed systems (CAP theorem). The ACID C is the odd one out — it's about application invariants, not a database feature.
+
+### Isolation Levels
+
+Transactions running concurrently can interfere in several ways. Isolation levels define how much interference is allowed:
+
+**Read uncommitted** — can read uncommitted data from other transactions (dirty reads). Barely any protection.
+
+**Read committed** — only read committed data (no dirty reads). Most common default (PostgreSQL, Oracle, SQL Server).
+- Prevents dirty reads: only see data after it's committed
+- Prevents dirty writes: only overwrite data that has been committed
+
+**Snapshot isolation (repeatable read)** — each transaction sees a consistent snapshot of the database at the time it started. Most common for long-running reads. Uses MVCC (Multi-Version Concurrency Control).
+- Prevents non-repeatable reads
+- Different transactions see different "versions" of the same rows
+
+**Serializable** — strongest isolation. Transactions execute as if they were serial (one at a time), even though they may actually run concurrently.
+
+### Race Conditions
+
+Even with good isolation, several race conditions can occur:
+
+**Dirty read**: reading uncommitted data from another transaction. Fixed by read committed.
+
+**Dirty write**: overwriting uncommitted data. Fixed by read committed.
+
+**Read skew (non-repeatable read)**: reading the same row twice in one transaction, getting different values because another transaction committed in between. Fixed by snapshot isolation.
+
+**Lost update**: two transactions read a value, modify it, and write it back — one write silently overwrites the other.
+```
+Transaction A: balance = read(account) → 500
+Transaction B: balance = read(account) → 500
+Transaction A: write(account, 500 + 100) → 600
+Transaction B: write(account, 500 + 200) → 700  ← A's write is lost!
+```
+Fixes: atomic operations (`UPDATE counter SET value = value + 1`), compare-and-set, explicit locking.
+
+**Write skew**: two transactions read overlapping data, make decisions based on it, then write to *different* objects — leading to an invariant violation.
+
+Example: hospital on-call system requires at least one doctor on call. Two doctors simultaneously check (both see 2 on call), decide it's safe to go off call, and both do. Now zero doctors on call.
+
+Write skew is tricky because the transactions don't update the *same* object, but they each based their decision on shared state. Requires true serializable isolation to prevent.
+
+**Phantoms**: a transaction reads rows matching some condition; another transaction inserts rows matching that condition; the first transaction re-reads and gets different results. Write skew involving inserts.
+
+### Serializability
+
+The only isolation level that prevents ALL race conditions. Three implementation approaches:
+
+**Actual serial execution**: literally execute one transaction at a time on one CPU core. Simple! Only works if transactions are fast and the dataset fits in memory. Used by VoltDB, Redis (single-threaded), Datomic.
+
+**Two-Phase Locking (2PL)**: readers and writers block each other.
+- Shared lock for reads
+- Exclusive lock for writes
+- Lock escalation from shared to exclusive requires other readers to release
+
+2PL has been the standard approach for decades. Performance is poor due to lock contention and deadlocks.
+
+**Serializable Snapshot Isolation (SSI)**: optimistic approach — allow all transactions to proceed, check for conflicts at commit time. If a conflict is detected, abort and retry.
+- Better performance than 2PL under low contention
+- Works with snapshots (like MVCC)
+- Used by PostgreSQL 9.1+, FoundationDB
+
+---
+
+## Week 2 Summary
+
+| Chapter | Key Ideas |
+|---------|-----------|
+| 5 | Leader-based replication, replication lag problems, multi-leader conflicts, leaderless quorums |
+| 6 | Key-range vs hash partitioning, secondary indexes, rebalancing strategies |
+| 7 | ACID properties, isolation levels, race conditions, serializability approaches |
+
+**Key insight for the week:** Distributing data gives you performance and availability gains, but introduces a whole new class of problems — inconsistency, conflicts, and race conditions. Every distributed system trades off between these guarantees.

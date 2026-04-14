@@ -155,3 +155,5 @@ yarn-debug.log*
 yarn-error.log*
 
 .claude
+.agents
+skills-lock.json

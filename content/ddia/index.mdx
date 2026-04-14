@@ -1,0 +1,54 @@
+---
+title: "Designing Data-Intensive Applications"
+description: "A 4-week study guide for Martin Kleppmann's DDIA — covering reliability, scalability, distributed systems, and data processing"
+category: "ddia"
+tags: ["distributed-systems", "databases", "scalability", "data-engineering", "system-design"]
+date: "2026-04-14"
+---
+
+# Designing Data-Intensive Applications
+
+A structured 4-week study guide based on Martin Kleppmann's *Designing Data-Intensive Applications* — one of the most important books for engineers working with data at scale.
+
+## What This Book Is About
+
+Modern applications are rarely limited by CPU power. The real challenges are **data** — how much of it, how complex it is, and how fast it changes. This book explores the fundamental ideas behind building systems that are:
+
+- **Reliable** — working correctly even when things go wrong
+- **Scalable** — handling growth in data, traffic, and complexity
+- **Maintainable** — easy for teams to work with over time
+
+## Structure
+
+The book covers 12 chapters across 3 parts:
+
+| Part | Topics | Weeks |
+|------|--------|-------|
+| **Part I: Foundations** | Data models, storage engines, encoding | Week 1 |
+| **Part II: Distributed Data** | Replication, partitioning, transactions, consensus | Weeks 2–3 |
+| **Part III: Derived Data** | Batch processing, stream processing, the future | Week 4 |
+
+## 4-Week Study Plan
+
+- [Week 1 — Foundations of Data Systems](/ddia/week1)
+  Chapters 1–4: Reliability/Scalability, Data Models, Storage Engines, Encoding
+- [Week 2 — Distributed Data: Replication & Transactions](/ddia/week2)
+  Chapters 5–7: Replication, Partitioning, Transactions
+- [Week 3 — Distributed Data: Failures & Consensus](/ddia/week3)
+  Chapters 8–9: Trouble with Distributed Systems, Consistency & Consensus
+- [Week 4 — Derived Data & The Future](/ddia/week4)
+  Chapters 10–12: Batch Processing, Stream Processing, Future of Data Systems
+
+## Key Themes
+
+Throughout the book, several themes recur:
+
+**Data models matter.** The relational model, document model, graph model, and column-oriented storage each fit different problems — there is no universal winner.
+
+**Storage engines have trade-offs.** Log-structured engines (LSM-trees) and page-oriented engines (B-trees) optimize for different workloads.
+
+**Distributed systems are fundamentally unreliable.** Networks drop packets, clocks drift, and processes pause unpredictably. Good systems are designed around these realities, not in denial of them.
+
+**There is no such thing as "the" consistency.** Linearizability, causal consistency, eventual consistency, and serializability are different guarantees with different costs.
+
+**Batch and stream processing are converging.** The Lambda Architecture and its successors blur the line between historical data processing and real-time event handling.

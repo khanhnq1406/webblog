@@ -1,0 +1,270 @@
+---
+title: "Week 4 — Batch Processing, Stream Processing & The Future"
+description: "Chapters 10–12: MapReduce, stream processing with Kafka, and the future architecture of data systems"
+category: "ddia"
+tags: ["batch-processing", "stream-processing", "mapreduce", "kafka", "data-pipelines", "lambda-architecture"]
+date: "2026-04-14"
+---
+
+# Week 4 — Batch Processing, Stream Processing & The Future
+
+**Chapters covered:** 10, 11, 12  
+**Core question:** *How do you process large amounts of data reliably and efficiently?*
+
+---
+
+## Chapter 10 — Batch Processing
+
+**Batch processing**: take a large amount of input data, run a job to process it, produce output. No interaction with users; runs periodically (hourly, nightly). The defining example is a MapReduce job.
+
+Batch processing is one of the oldest computing paradigms — it predates online databases. Modern systems like Hadoop, Spark, and Flink are sophisticated implementations of this idea.
+
+### The Unix Philosophy
+
+Batch processing in Unix (pipes and shell scripts) embodies four principles:
+1. Make each program do one thing well
+2. Expect the output of every program to be the input to another
+3. Design and build software to be tried early
+4. Use tools in preference to manual help
+
+The pipe `|` is the key abstraction: programs communicate via stdin/stdout, are loosely coupled, and compose freely. This design philosophy scales surprisingly well.
+
+### MapReduce
+
+MapReduce is the batch processing programming model made famous by Google (2004 paper) and implemented in Hadoop.
+
+**The two functions**:
+- **Map**: called once for each record in the input. Emits zero or more key-value pairs.
+- **Reduce**: called for each unique key, receives all values associated with that key. Produces output.
+
+**Example — count page views per URL**:
+```
+Map: (log_line) → emit(url, 1)
+Reduce: (url, [1,1,1,1,...]) → emit(url, count)
+```
+
+**MapReduce execution flow**:
+1. Read input files from distributed filesystem (HDFS)
+2. Run **map** tasks in parallel (one per input block, close to data)
+3. **Shuffle**: sort and partition map output by key, send to reducers
+4. Run **reduce** tasks in parallel (one per key range)
+5. Write output to distributed filesystem
+
+The shuffle step is expensive — it involves sorting and transferring data across the network.
+
+### Joins in MapReduce
+
+Relational databases handle joins automatically. In MapReduce, you implement them yourself.
+
+**Sort-merge join (reduce-side join)**:
+- Map over both input datasets, emit records keyed by the join key
+- Reducer receives all records for a given key from both datasets
+- Problem: all data goes through the shuffle, which is expensive
+
+**Broadcast hash join (map-side join)**:
+- If one dataset is small enough to fit in memory, load it as a hash map in each mapper
+- Map over the large dataset, look up each key in the in-memory hash map
+- No reducer needed — much faster for small-large joins
+
+**Partitioned hash join**:
+- Both datasets partitioned the same way → mappers only join their local partition
+- Requires both datasets to be partitioned identically
+
+### The Output of Batch Workflows
+
+What do you do with the output?
+
+- **Search indexes**: Lucene index files written to HDFS, loaded by search servers
+- **Key-value store snapshots**: materialized views written to databases like HBase or Voldemort
+- **Reports and analytics**: written as files for downstream consumption
+
+The key property: **batch jobs read immutable input and produce immutable output**. They never update data in place. This makes them:
+- Easy to retry on failure (idempotent)
+- Easy to roll back (just delete the bad output and re-run)
+- Easy to audit (input and output both preserved)
+
+### Beyond MapReduce
+
+MapReduce is simple but verbose and slow (writes to HDFS between every step). Modern alternatives:
+
+**Apache Spark**: uses in-memory pipeline. Intermediate results stay in RAM rather than being materialized to disk. Much faster for iterative algorithms (machine learning, graph processing).
+
+**Dataflow engines** (Flink, Tez): generalize MapReduce by allowing arbitrary DAGs of operations rather than just map-then-reduce. Operators that require sorting are explicitly specified; others aren't forced into a sort phase.
+
+**Pregel model**: for graph algorithms (PageRank, shortest paths). Vertices exchange messages along edges. Works well when computation fits the graph's structure.
+
+---
+
+## Chapter 11 — Stream Processing
+
+**Stream processing**: data arrives continuously (events in real-time) rather than in a finite batch. Process each event as it arrives.
+
+Examples:
+- Credit card fraud detection (process each transaction immediately)
+- Monitoring (alert when CPU usage spikes)
+- Activity feeds (show new posts to followers)
+- Event sourcing (update derived views as events arrive)
+
+### Messaging Systems
+
+Events need to be transported from producers to consumers:
+
+**Direct messaging (no broker)**: producer sends directly to consumer. Simple, but what if consumer is offline? Buffer overflow? Messages lost.
+
+**Message brokers** (RabbitMQ, ActiveMQ, Azure Service Bus):
+- Intermediate between producer and consumer
+- Consumer is offline → broker queues messages
+- Acknowledgment model: consumer explicitly acks each message; broker retries on failure
+- Typically deleted after delivery
+
+**Log-based message brokers** (Apache Kafka, Amazon Kinesis):
+- Messages stored durably on disk, in append-only log
+- Consumers track their **offset** in the log; broker doesn't track acks
+- Old messages can be re-read (replay from any offset)
+- Fan-out: multiple consumers read the same log independently
+- Partitioned log: log split across multiple machines for scaling
+
+Kafka combines the durability of databases with the low-latency of messaging. It's become the backbone of many data architectures.
+
+### Databases and Streams
+
+The insight: **a database is fundamentally a log of state changes, and a stream is a log of events**. They're the same abstraction.
+
+**Change Data Capture (CDC)**: observe all writes to a database and publish them as a stream. Other systems (search indexes, caches, analytics warehouses) subscribe and keep themselves in sync.
+
+- Avoids dual-write problems (writing to two systems atomically)
+- Source of truth: the database. Everything else is a derived view.
+- Used by: Debezium (Postgres/MySQL CDC), LinkedIn's Databus
+
+**Event sourcing**: instead of storing the current state of data, store all events that led to that state. The current state is derived by replaying events.
+
+- Full audit trail of all changes
+- Can reconstruct state at any point in time
+- Can derive multiple different views from the same event log
+- Popularized by DDD (Domain-Driven Design) community
+- Downside: replaying events to get current state can be slow → use snapshots
+
+**State, streams, and immutability**: immutable event logs have big advantages. You can always derive new views from the same log. The log is the ground truth; derived state is just a cache.
+
+### Processing Streams
+
+Three main things you can do with a stream:
+1. Write to a database/cache/index
+2. Push events to users (notifications, dashboards)
+3. Process to produce new output streams
+
+**Stream processors** (Kafka Streams, Apache Flink, Apache Storm, Spark Streaming):
+
+**Stateless transformations**: filter, map, project — easy, no state needed.
+
+**Stateful operations**: aggregations, joins, sessionization — require maintaining state.
+
+**Time in stream processing**:
+- **Event time**: when the event actually occurred (in the source system)
+- **Processing time**: when the event was processed by the stream processor
+
+These differ due to network delays, batching, and retries. Handling late events gracefully is hard.
+
+**Windowing**: grouping events into time-based buckets for aggregation.
+- **Tumbling window**: fixed-size, non-overlapping (e.g., 1-minute windows)
+- **Hopping window**: fixed-size, overlapping (e.g., 5-minute window every 1 minute)
+- **Sliding window**: contains all events within last X minutes of *event time*
+- **Session window**: groups events by activity gap (inactivity closes the session)
+
+**Stream joins**:
+- **Stream-stream join**: two streams joined on common key within a time window
+- **Stream-table join (enrichment)**: events joined with slowly-changing table data
+- **Table-table join**: both tables maintained from streams; output is a materialized view
+
+### Fault Tolerance in Stream Processing
+
+Batch processing is easy to make fault-tolerant (re-run the job). Stream processing is ongoing — how do you handle failures?
+
+**Microbatching** (Spark Streaming): process events in small batches (e.g., every second). Each microbatch is idempotent. Simple but adds latency.
+
+**Checkpointing** (Apache Flink): periodically save state to durable storage. On failure, restart from last checkpoint. More efficient than microbatching.
+
+**Exactly-once semantics**: ensure each event is processed exactly once, even if the processor crashes and restarts. Achieved via:
+- Idempotent writes (deduplication at the destination)
+- Distributed transactions (expensive)
+- Effectively-once: process at-least-once but make effects idempotent
+
+---
+
+## Chapter 12 — The Future of Data Systems
+
+### Data Integration
+
+The big architectural challenge: most organizations use many different data systems (OLTP DB, search index, cache, data warehouse, ML feature store...). How do you keep them in sync?
+
+**The problem with dual writes**: write to system A, then write to system B. If A succeeds but B fails → inconsistency. This is the core of the data integration problem.
+
+**The solution: derive everything from one log**. Write only to one system (the system of record). Use CDC or event sourcing to derive all other systems from that log. The log is the single source of truth.
+
+**Lambda Architecture**: run batch and stream processing in parallel. Batch layer recomputes from scratch periodically (accurate but slow). Speed layer handles recent data (fast but approximate). Serving layer merges both. Problem: two codepaths are hard to maintain.
+
+**Kappa Architecture**: replace batch layer with stream processing. Process all data as streams; periodically reprocess historical data by replaying from Kafka. Simpler: one codepath.
+
+### Unbundling the Database
+
+Traditional databases are monolithic: storage, indexing, query processing, caching all in one system. Modern architectures "unbundle" these:
+
+- Durable storage: HDFS, S3
+- Query engines: Presto, Spark SQL, Hive
+- Streaming: Kafka
+- Indexing: Elasticsearch
+- Caching: Redis, Memcached
+- Coordination: ZooKeeper
+
+Each component does one thing well. The dataflow graph connects them. This is the Unix philosophy applied to data infrastructure.
+
+**Derived data**: most of these components store *derived* data (caches, indexes, materialized views). The source of truth is a small set of systems. Derived data can be re-created at any time from the source.
+
+### Correctness
+
+A key insight: **most databases don't actually guarantee end-to-end correctness**. They provide transactions within one service, but not across multiple services.
+
+**End-to-end argument**: the only way to be sure an operation succeeded is to check at the final destination, not just at intermediate steps. TCP checksums don't prevent corrupted data written to disk.
+
+**Idempotency**: make all operations idempotent so you can safely retry. Use unique operation IDs (idempotency keys) to deduplicate at the destination.
+
+**Constraints**: enforcing uniqueness or other invariants in distributed systems requires coordination. Approaches:
+- Synchronous coordination (linearizable): correct but slow
+- Async constraint checking: approximate, allow violations and compensate later
+- Apologies and compensation: sometimes it's OK to sometimes be wrong and fix it
+
+### Ethics and the Future
+
+Kleppmann ends with a rare ethical discussion for a technical book.
+
+**Predictive analytics**: using past behavior to predict future behavior. Used for credit scoring, parole decisions, ad targeting. Problems:
+- Self-fulfilling prophecies
+- Bias amplification (historical data encodes historical discrimination)
+- No accountability or appeal mechanism
+
+**Privacy and surveillance**: behavioral tracking data is used to build detailed profiles. The word "data" sanitizes what is effectively "surveillance." Engineers are responsible for systems they build, even if they didn't intend them to be used harmfully.
+
+---
+
+## Week 4 Summary
+
+| Chapter | Key Ideas |
+|---------|-----------|
+| 10 | MapReduce, sort-merge joins, immutable batch processing, Spark |
+| 11 | Kafka log, CDC, event sourcing, windowing, exactly-once semantics |
+| 12 | Data integration, unbundling, end-to-end correctness, idempotency, ethics |
+
+**Key insight for the week:** Modern data systems are converging on a common architecture: an immutable log as the source of truth, with many derived views (databases, indexes, caches, ML models) kept in sync by processing that log. Batch and stream processing are different speeds of the same thing.
+
+---
+
+## Complete Book Summary
+
+| Week | Part | Chapters | Theme |
+|------|------|----------|-------|
+| 1 | Foundations | 1–4 | What is a data system? Trade-offs in models, storage, encoding |
+| 2 | Distributed | 5–7 | How to spread data across machines and keep it consistent |
+| 3 | Distributed | 8–9 | Why distributed systems are hard and how to build reliable ones |
+| 4 | Derived | 10–12 | How to process data at scale, past and present |
+
+**The overarching message of DDIA**: There is no silver bullet. Every design decision is a trade-off. The goal of a systems engineer is to understand those trade-offs deeply enough to make good choices for their specific context — not to chase trends or blindly apply best practices.

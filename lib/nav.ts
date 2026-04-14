@@ -55,6 +55,17 @@ export const sidebarNav: NavItem[] = [
     title: "Gym",
     href: "/gym",
   },
+  {
+    title: "DDIA",
+    href: "/ddia",
+    items: [
+      { title: "Overview", href: "/ddia" },
+      { title: "Week 1 — Foundations", href: "/ddia/week1" },
+      { title: "Week 2 — Replication & Transactions", href: "/ddia/week2" },
+      { title: "Week 3 — Failures & Consensus", href: "/ddia/week3" },
+      { title: "Week 4 — Batch & Stream", href: "/ddia/week4" },
+    ],
+  },
 ];
 
 export const headerNav: NavItem[] = [
