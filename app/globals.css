@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 215 28% 13%;      /* #161b22 — GitHub dark page bg, clearly lighter than code #0d1117 */
+    --foreground: 210 17% 82%;      /* #cdd9e5 — GitHub dark body text, high contrast */
+    --card: 215 28% 16%;
+    --card-foreground: 210 17% 82%;
+    --popover: 215 28% 16%;
+    --popover-foreground: 210 17% 82%;
+    --primary: 210 17% 89%;         /* #e6edf3 — headings/bold */
+    --primary-foreground: 215 28% 13%;
+    --secondary: 215 20% 20%;
+    --secondary-foreground: 210 17% 82%;
+    --muted: 215 20% 20%;
+    --muted-foreground: 215 13% 55%; /* #8b949e — subdued but still readable */
+    --accent: 215 20% 22%;
+    --accent-foreground: 210 17% 82%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 17% 89%;
+    --border: 215 20% 23%;          /* #30363d */
+    --input: 215 20% 23%;
+    --ring: 212 92% 45%;            /* blue accent */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Reading progress bar */
+.reading-progress {
+  @apply fixed top-0 left-0 h-0.5 bg-primary z-50 transition-all duration-100;
+}
+
+/* ── Code blocks (fenced) ──────────────────────────────────────────────── */
+/* rehype-pretty-code sets data-theme on pre/code — use those backgrounds  */
+[data-rehype-pretty-code-figure] pre {
+  @apply overflow-x-auto rounded-lg border px-0 py-3 text-sm leading-relaxed;
+  /* border color matches shiki theme */
+}
+
+/* github-light theme: shiki sets bg #fff — add a visible border + subtle bg */
+[data-rehype-pretty-code-figure] pre[data-theme~="light"] {
+  background-color: #f6f8fa !important;
+  border-color: #d0d7de !important;
+}
+
+/* github-dark theme: shiki sets bg #0d1117 — keep it, just ensure border */
+[data-rehype-pretty-code-figure] pre[data-theme~="dark"] {
+  border-color: #30363d !important;
+}
+
+[data-rehype-pretty-code-figure] code {
+  @apply text-sm font-mono;
+  background: transparent !important;
+  padding: 0 !important;
+  /* shiki injects per-token colors via style — don't override them */
+}
+
+[data-rehype-pretty-code-figure] [data-line] {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* ── Inline code ──────────────────────────────────────────────────────── */
+:not(pre) > code {
+  background-color: #e8eaed !important;
+  color: #1f2328 !important;
+  padding: 0.15em 0.4em !important;
+  border-radius: 0.3rem !important;
+  font-size: 0.85em !important;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace !important;
+  border: 1px solid #c8ccd0 !important;
+}
+
+.dark :not(pre) > code {
+  background-color: #2d333b !important;
+  color: #cdd9e5 !important;
+  border-color: #444c56 !important;
+}
+
+/* ── Prose body text — force high contrast in dark mode ──────────────── */
+/* Override prose-invert's muted zinc values with GitHub Dark palette      */
+.dark .prose-dark-fix {
+  --tw-prose-body: #cdd9e5;
+  --tw-prose-headings: #e6edf3;
+  --tw-prose-lead: #cdd9e5;
+  --tw-prose-bold: #e6edf3;
+  --tw-prose-links: #79c0ff;
+  --tw-prose-code: #cdd9e5;
+  --tw-prose-counters: #8b949e;
+  --tw-prose-bullets: #8b949e;
+  --tw-prose-quotes: #8b949e;
+  --tw-prose-quote-borders: #444c56;
+  --tw-prose-captions: #8b949e;
+  --tw-prose-hr: #21262d;
+  --tw-prose-th-borders: #444c56;
+  --tw-prose-td-borders: #21262d;
+}
+
+/* Directly target the text elements to guarantee override */
+.dark .prose-dark-fix p,
+.dark .prose-dark-fix li,
+.dark .prose-dark-fix td,
+.dark .prose-dark-fix th,
+.dark .prose-dark-fix blockquote {
+  color: #cdd9e5;
+}
+
+.dark .prose-dark-fix h1,
+.dark .prose-dark-fix h2,
+.dark .prose-dark-fix h3,
+.dark .prose-dark-fix h4,
+.dark .prose-dark-fix strong {
+  color: #e6edf3;
+}
+
+.dark .prose-dark-fix a {
+  color: #79c0ff;
+}

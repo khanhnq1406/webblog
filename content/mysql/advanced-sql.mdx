@@ -1,0 +1,57 @@
+---
+title: "Advanced SQL"
+description: "Subqueries, CASE statements, and VIEWs in MySQL"
+category: "mysql"
+tags: ["mysql", "subqueries", "case", "views", "advanced"]
+date: "2024-01-01"
+---
+
+## What is a Subquery?
+
+A subquery is a query nested inside another query. It is used to perform a query within a query.
+
+---
+
+## Types of Subquery
+
+- **Nested subquery:** Nested subquery first executes the inner SELECT query and then with the returning values executes the outer query
+- **Correlated subquery:** A correlated subquery reads every row in a table and comparing values in each row against related data
+
+---
+
+## How Subquery Executes?
+
+There are two parts in a subquery: Inner Query and Outer query.
+
+![Inner Query and Outer Query](https://cdn.prod.website-files.com/65f854814fd223fc3678ea53/65f854814fd223fc3678f159_Inner-query.png)
+
+---
+
+## SQL CASE statement
+
+### CASE Statement
+
+- First the CASE statement reads through all the conditions and returns a value when the first condition is met like an IF-THEN-ELSE statement
+- When a condition is true, automatically it will stop reading and return the result
+- If no condition is true, it will return the value in the ELSE clause
+- If there is no ELSE part and no condition is true, it returns NULL
+
+```sql
+SELECT custid, fname, age,
+CASE
+	WHEN age > 30 THEN 'The age is greater than 30'
+    WHEN age = 30 THEN 'The age is 30'
+    ELSE 'The age is not group of 30'
+END AS AgeInformation
+FROM DataOfCustomer;
+```
+
+---
+
+## VIEW in MySQL
+
+- View stands for virtual table which is based on the result-set of an SQL statement
+- Normally in view, it contains rows and columns which is like a real table
+- The fields in a view are fields from one or more real tables in the database
+
+![MySQL View](https://www.mysqltutorial.org/wp-content/uploads/2019/08/MySQL-View.png)

@@ -1,0 +1,219 @@
+---
+title: "Basic Level"
+description: "Foundational frontend questions covering HTML, CSS, and JavaScript basics"
+category: "fe-interview"
+tags: ["css", "html", "javascript", "dom", "basics"]
+date: "2024-01-01"
+---
+
+# Basic Level
+
+## 1. What is the difference between `id` and `class` in HTML/CSS?
+
+An `id` is a unique identifier for a single HTML element — no two elements on the same page should share the same `id`. A `class` can be applied to multiple elements and is used to group elements that share the same styles or behavior.
+
+In CSS, `id` is selected with `#` and `class` with `.`:
+
+```css
+#unique-element { color: red; }
+.shared-style { font-size: 16px; }
+```
+
+`id` also has higher specificity than `class`, meaning its styles will override class styles when both target the same element.
+
+---
+
+## 2. What is the CSS box model?
+
+Every HTML element is represented as a rectangular box. The CSS box model describes how that box is structured, consisting of four layers from the inside out:
+
+1. **Content** — The actual content of the element (text, images, etc.)
+2. **Padding** — Space between the content and the border
+3. **Border** — A line surrounding the padding and content
+4. **Margin** — Space outside the border, separating the element from others
+
+```css
+.box {
+  width: 200px;
+  padding: 10px;
+  border: 2px solid black;
+  margin: 20px;
+}
+```
+
+By default (`box-sizing: content-box`), `width` and `height` apply only to the content area. With `box-sizing: border-box`, they include padding and border, making layout calculations easier.
+
+---
+
+## 3. What is the difference between `inline`, `inline-block`, and `block` elements?
+
+| Property | `inline` | `inline-block` | `block` |
+|---|---|---|---|
+| Starts on a new line | ✗ | ✗ | ✓ |
+| Takes full width available | ✗ | ✗ | ✓ |
+| Respects `width` and `height` | ✗ | ✓ | ✓ |
+| Respects top/bottom `margin` and `padding` | ✗ | ✓ | ✓ |
+| Can sit next to other elements | ✓ | ✓ | ✗ |
+
+Examples:
+- **Inline:** `<span>`, `<a>`, `<strong>`
+- **Inline-block:** `<img>`, `<button>`
+- **Block:** `<div>`, `<p>`, `<h1>`–`<h6>`
+
+---
+
+## 4. What is SEO and why does it matter for frontend developers?
+
+**SEO (Search Engine Optimization)** is the practice of improving a website so that it ranks higher in search engine results pages (SERPs), leading to more organic (non-paid) traffic.
+
+Frontend developers play a key role in SEO by:
+
+- Using **semantic HTML** tags (`<header>`, `<nav>`, `<main>`, `<article>`) to help search engines understand content structure
+- Writing descriptive `<title>` and `<meta name="description">` tags
+- Adding `alt` attributes to images
+- Ensuring fast page load times (performance directly affects ranking)
+- Making sites **mobile-friendly** (Google uses mobile-first indexing)
+- Using proper heading hierarchy (`<h1>` through `<h6>`)
+- Implementing structured data (schema.org) for rich results
+
+---
+
+## 5. What is the DOM?
+
+The **DOM (Document Object Model)** is a programming interface provided by the browser that represents an HTML document as a tree of objects. Each HTML element becomes a node in this tree, and JavaScript can interact with these nodes to read, modify, create, or delete content and structure dynamically.
+
+```javascript
+// Selecting a DOM node
+const heading = document.getElementById('main-title');
+
+// Modifying content
+heading.textContent = 'New Title';
+
+// Creating and appending a new element
+const para = document.createElement('p');
+para.textContent = 'Hello, DOM!';
+document.body.appendChild(para);
+```
+
+The DOM is not the same as HTML source code — it is a live, in-memory representation that can change as JavaScript runs.
+
+---
+
+## 6. What are event listeners and how do you use them?
+
+An **event listener** is a function that waits for a specific event to occur on an element (such as a click, keypress, or form submission) and then executes a callback function in response.
+
+```javascript
+const button = document.querySelector('#my-button');
+
+button.addEventListener('click', function(event) {
+  console.log('Button clicked!', event.target);
+});
+```
+
+You can also remove an event listener using `removeEventListener`, which requires a reference to the same named function:
+
+```javascript
+function handleClick(event) {
+  console.log('Clicked');
+}
+
+button.addEventListener('click', handleClick);
+button.removeEventListener('click', handleClick);
+```
+
+Common events include `click`, `submit`, `keydown`, `mouseover`, `load`, and `DOMContentLoaded`.
+
+---
+
+## 7. What is the difference between `null` and `undefined` in JavaScript?
+
+Both represent the absence of a value, but they are used in different contexts:
+
+- **`undefined`** means a variable has been declared but has not yet been assigned a value. It is also the default return value of functions that don't explicitly return anything.
+- **`null`** is an intentional assignment indicating "no value" or "empty". It must be assigned explicitly by the developer.
+
+```javascript
+let a;
+console.log(a); // undefined
+
+let b = null;
+console.log(b); // null
+
+console.log(typeof undefined); // "undefined"
+console.log(typeof null);      // "object" (a known JavaScript quirk)
+
+console.log(null == undefined);  // true  (loose equality)
+console.log(null === undefined); // false (strict equality)
+```
+
+---
+
+## 8. What is the difference between cookies, `sessionStorage`, and `localStorage`?
+
+All three are mechanisms for storing data in the browser, but they differ in scope, lifetime, and capacity:
+
+| Feature | Cookies | `sessionStorage` | `localStorage` |
+|---|---|---|---|
+| Capacity | ~4 KB | ~5 MB | ~5–10 MB |
+| Expires | Set manually or on session end | When tab/window closes | Never (until cleared) |
+| Sent with HTTP requests | ✓ | ✗ | ✗ |
+| Accessible via JavaScript | ✓ | ✓ | ✓ |
+| Scope | All windows/tabs (same origin) | Current tab only | All windows/tabs (same origin) |
+
+Use cookies for authentication tokens that need to be sent to the server. Use `sessionStorage` for temporary, tab-specific data. Use `localStorage` for persistent client-side data like user preferences.
+
+---
+
+## 9. How does a browser render a website?
+
+When a browser loads a web page, it follows several steps:
+
+1. **DNS Lookup** — Resolves the domain name to an IP address.
+2. **TCP Connection** — Establishes a connection to the server (with TLS handshake for HTTPS).
+3. **HTTP Request** — Sends a request for the HTML document.
+4. **HTML Parsing** — The browser parses the HTML and builds the **DOM tree**.
+5. **CSS Parsing** — Stylesheets are fetched and parsed to build the **CSSOM tree**.
+6. **Render Tree** — The DOM and CSSOM are combined into a **render tree**, which contains only visible elements.
+7. **Layout (Reflow)** — The browser calculates the size and position of each element.
+8. **Paint** — Pixels are drawn to the screen.
+9. **Compositing** — Layers are composited together in the correct order.
+
+JavaScript can block HTML parsing if it appears before the content (use `defer` or `async` attributes to avoid this).
+
+---
+
+## 10. What are media queries and how are they used?
+
+**Media queries** are a CSS feature that allows styles to be applied conditionally based on the characteristics of the device or viewport, such as screen width, height, orientation, or resolution. They are the foundation of **responsive web design**.
+
+```css
+/* Default styles for mobile */
+body {
+  font-size: 14px;
+}
+
+/* Styles for tablets and larger */
+@media (min-width: 768px) {
+  body {
+    font-size: 16px;
+  }
+}
+
+/* Styles for desktops */
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+/* Orientation query */
+@media (orientation: landscape) {
+  .hero {
+    height: 50vh;
+  }
+}
+```
+
+The `min-width` approach follows a **mobile-first** strategy, while `max-width` follows a desktop-first strategy. Mobile-first is generally recommended as it promotes better performance on smaller devices.

@@ -1,0 +1,170 @@
+---
+title: "MySQL Cheat Sheet"
+description: "Quick reference for MySQL commands: SELECT, ORDER BY, LIKE, LIMIT, HAVING"
+category: "mysql"
+tags: ["mysql", "cheatsheet", "sql", "reference"]
+date: "2024-01-01"
+---
+
+## SHOW
+
+```sql
+SHOW databases;
+SHOW tables;
+```
+
+## USE
+
+```sql
+USE database_name;
+```
+
+## DESCRIBE
+
+```sql
+DESCRIBE table_name;
+```
+
+---
+
+## SELECT
+
+### Basic
+
+```sql
+SELECT <columns> FROM table_name
+WHERE <condition>;
+```
+
+### Calculate in Query
+
+```sql
+SELECT <columns> FROM table_name
+WHERE (column.a+column.b) = c;
+```
+
+### SELECT DISTINCT
+
+Inside a table, a column often contains many duplicate values; and sometimes you only want to list the different (distinct) values.
+
+The SELECT DISTINCT statement is used to return only distinct (different) values.
+
+```sql
+SELECT DISTINCT <columns> FROM table_name
+WHERE (column.a+column.b) = c;
+```
+
+```sql
+SELECT COUNT(CITY) - COUNT(DISTINCT CITY) AS difference FROM STATION;
+```
+
+---
+
+## ORDER BY Keyword
+
+The ORDER BY keyword is used to sort the result-set in ascending or descending order.
+
+When you use ORDER BY with **several columns** in SQL, the rows are sorted first by the first column, and then by subsequent columns in the specified order if there are ties in the previous column(s).
+
+- **Primary Sorting (First Column):** The rows are sorted based on the first column in the ORDER BY clause.
+- **Secondary Sorting (Second Column):** If two or more rows have the same value in the first column, they are sorted based on the second column.
+- **Tertiary Sorting (Third Column):** If rows are still tied after the second column, they are sorted based on the third column, and so on.
+
+```sql
+-- Get shortest 
+SELECT 
+    CITY, LENGTH(CITY) AS name_length
+FROM 
+    STATION
+ORDER BY 
+    LENGTH(CITY) ASC, CITY ASC
+LIMIT 1;
+    
+-- Get longest
+SELECT 
+    CITY, LENGTH(CITY) AS name_length
+FROM 
+    STATION
+ORDER BY 
+    LENGTH(CITY) DESC, CITY ASC
+LIMIT 1;
+```
+
+---
+
+## LIKE
+
+The LIKE operator is used to search for a specified pattern in a column.
+
+```sql
+SELECT DISTINCT CITY FROM STATION WHERE CITY LIKE 'A%'
+```
+
+---
+
+## SUBSTRING
+
+Extract a substring from a string (start at position 1, extract 3 characters):
+
+```sql
+SUBSTRING(string, start, length)
+```
+
+```sql
+SELECT SUBSTRING("SQL Tutorial", 1, 3) AS ExtractString;
+```
+
+---
+
+## RIGHT
+
+The RIGHT() function extracts a number of characters from a string (starting from right).
+
+```sql
+RIGHT(string, length)
+```
+
+```sql
+SELECT RIGHT("SQL Tutorial is cool", 4) AS ExtractString;
+```
+
+---
+
+## LIMIT OFFSET
+
+Retrieves a specific row based on its position in the sorted list.
+
+```sql
+LIMIT 1 OFFSET FLOOR(COUNT(LAT_N) / 2))
+```
+
+---
+
+## WITH clause
+
+The SQL WITH clause is used to define temporary tables or result sets within a query. These temporary relations (also called Common Table Expressions (CTEs)) can then be referenced in the main query multiple times, allowing for more readable and maintainable SQL code.
+
+```sql
+WITH temporaryTable AS (
+    SELECT AVG (Attr1) AS averageValue
+    FROM Table
+)
+SELECT Attr1
+FROM Table, temporaryTable
+WHERE Table.Attr1 > temporaryTable.averageValue;
+```
+
+---
+
+## HAVING clause
+
+The HAVING clause was added to SQL because the WHERE keyword cannot be used with aggregate functions.
+
+```sql
+SELECT column_name(s)
+FROM table_name
+WHERE condition
+GROUP BY column_name(s)
+HAVING condition
+ORDER BY column_name(s);
+```

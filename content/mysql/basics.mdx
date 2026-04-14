@@ -1,0 +1,103 @@
+---
+title: "MySQL Basics"
+description: "Key concepts in relational database management: types of keys and normalization"
+category: "mysql"
+tags: ["mysql", "rdbms", "keys", "normalization"]
+date: "2024-01-01"
+---
+
+## Key concepts in relational database management system
+
+![SQL Keys](https://powerbidocs.com/wp-content/uploads/2019/12/SQL-Keys.png)
+
+### Types of Key in RDBMS
+
+- Primary Key
+- Super Key
+- Candidate Key
+- Alternate Key
+- Composite Key
+- Foreign Key
+
+### Primary key
+
+A primary key concept is basically a technique to classify unique tuples (rows) in a table.
+
+- Primary key does not contain null value
+- Value should be unique
+- Primary keys are not always to be a single attribute/column and it can also be a set of more than one attributes/columns
+
+### Super key
+
+A super key is a set of one of more columns or attributes to uniquely classify rows in a table. For Example, STUD_NO, (STUD_NO, STUD_NAME), etc.
+
+- Super key is a superset of a candidate key
+
+### Candidate key
+
+The minimal set of attributes that can uniquely identify a tuple is known as a candidate key. For Example, STUD_NO in STUDENT relation.
+
+### Alternate key
+
+The candidate key other than the primary key is called an alternate key.
+
+- Alternate key is also known as secondary key
+- All the keys which are not primary keys are called alternate keys.
+
+### Composite key
+
+Sometimes, a table might not have a single column/attribute that uniquely identifies all the records of a table. To uniquely identify rows of a table, a combination of two or more columns/attributes can be used. It still can give duplicate values in rare cases. So, we need to find the optimal set of attributes that can uniquely identify rows in a table.
+
+For example: FULLNAME + DOB can be combined together to access the details of a student.
+
+### Foreign Key
+
+If an attribute can only take the values which are present as values of some other attribute, it will be a foreign key to the attribute to which it refers. The relation which is being referenced is called referenced relation and the corresponding attribute is called referenced attribute. The referenced attribute of the referenced relation should be the primary key to it.
+
+---
+
+## Normalization technique
+
+### What is Normalization?
+
+Normalization is the process of organzing data to avoid duplication and redundancy.
+
+- Helps to minimize duplicate
+- To minimize or avoid data modification issues
+- To simplify queries
+
+### Types of Normalization
+
+- 1NF (First Normal Form)
+- 2NF (Second Normal Form)
+- 3NF (Third Normal Form)
+- Boyce and Codd Normal Form (BCNF)
+
+#### First Normal Form (1NF)
+
+- A relation in which the intersection of each row and column contains **one and only one value.**
+- This is the requirement of a relation: each cell of relation contains exactly one value.
+
+![First Normal Form (1NF)](https://cstaleem.com/wp-content/uploads/2021/03/First-Normal-Form-1NF.png)
+
+#### Second Normal Form (2NF)
+
+- In the 2NF, relational must be in 1NF
+- Every non-primary-key attribute is **fully functionally dependent** on the primary key.
+- In other words, if there is any non-primary-key attribute is partially functionally dependent on the primary key, a relation not in 2NF.
+
+![Second Normal Form (2NF)](https://lh4.googleusercontent.com/proxy/onZ61hN1PAoS4yTOFKWND5BaS8U3cB2wh4qiffwAVPooTmcYKnE2NeoOkP_y4C_5Fwsurl46jcqkRQ7bDkQbP618elHqOw)
+
+#### Third Normal Form (3NF)
+
+- In the 3NF, relational must be in 2NF
+- It does not contain any **transitive partial dependency**
+- 3NF helps to reduce the data duplication
+
+![Third Normal Form (3NF)](https://ars.els-cdn.com/content/image/3-s2.0-B9780124114616000083-f08-17-9780124114616.jpg)
+
+#### Boyce and Codd Normal Form (BCNF)
+
+- BCNF is basically the advanced version of 3NF
+- It is more strict than 3NF
+- To use the law of BCNF we need to make sure that our data is already in 3NF

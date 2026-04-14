@@ -1,0 +1,307 @@
+---
+title: "Intermediate Level"
+description: "Intermediate frontend questions on CSS layout, JavaScript closures, promises, and web APIs"
+category: "fe-interview"
+tags: ["css", "flexbox", "grid", "closures", "promises", "javascript"]
+date: "2024-01-01"
+---
+
+# Intermediate Level
+
+## 11. What is the difference between `em` and `rem` in CSS?
+
+Both `em` and `rem` are relative units of measurement in CSS, but they reference different base values:
+
+- **`em`** is relative to the font size of the **parent element**. If a parent has `font-size: 20px` and a child uses `padding: 1em`, that padding will be `20px`. This can compound in nested elements, making it harder to reason about.
+- **`rem`** (root em) is relative to the font size of the **root element** (`<html>`), which defaults to `16px` in most browsers. This makes `rem` more predictable and consistent across nested components.
+
+```css
+html { font-size: 16px; }
+
+.parent {
+  font-size: 20px;
+  padding: 1em;  /* 20px — relative to .parent */
+}
+
+.child {
+  font-size: 1rem;  /* 16px — always relative to root */
+  padding: 1em;     /* 16px — relative to .child's font-size */
+}
+```
+
+**General rule:** Use `rem` for font sizes (consistent sizing) and `em` for spacing that should scale with the component's own font size.
+
+---
+
+## 12. What is Flexbox and when would you use it?
+
+**Flexbox** (Flexible Box Layout) is a CSS layout model designed for arranging items in a single direction — either a row or a column. It gives a container the ability to alter its items' width, height, and order to best fill the available space.
+
+Key concepts:
+- **Flex container** — the parent element with `display: flex`
+- **Flex items** — the direct children of the container
+- **Main axis** — the primary direction of layout (row or column)
+- **Cross axis** — perpendicular to the main axis
+
+```css
+.container {
+  display: flex;
+  flex-direction: row;       /* or column */
+  justify-content: center;   /* align along main axis */
+  align-items: center;       /* align along cross axis */
+  gap: 16px;
+}
+
+.item {
+  flex: 1;  /* grow and shrink equally */
+}
+```
+
+Use Flexbox for:
+- Navigation bars
+- Centering content vertically and horizontally
+- Card rows and toolbars
+- Any one-dimensional layout
+
+---
+
+## 13. What is CSS specificity and how is it calculated?
+
+**CSS specificity** determines which CSS rule is applied when multiple rules target the same element. It is calculated as a score based on the types of selectors used.
+
+The specificity hierarchy (from highest to lowest):
+
+1. **Inline styles** — `style="color: red"` → `1,0,0,0`
+2. **IDs** — `#header` → `0,1,0,0`
+3. **Classes, attributes, pseudo-classes** — `.nav`, `[type="text"]`, `:hover` → `0,0,1,0`
+4. **Elements, pseudo-elements** — `div`, `::before` → `0,0,0,1`
+
+```css
+p { color: black; }           /* 0,0,0,1 */
+.text { color: blue; }        /* 0,0,1,0 — wins over element */
+#main p { color: green; }     /* 0,1,0,1 — wins over class */
+p { color: red !important; }  /* !important overrides everything */
+```
+
+When two rules have equal specificity, the **last one declared** wins (cascade order).
+
+---
+
+## 14. What is CSS Grid and how does it differ from Flexbox?
+
+**CSS Grid** is a two-dimensional layout system that allows you to place elements in both rows and columns simultaneously. While Flexbox is ideal for one-dimensional layouts, Grid excels at defining the overall page structure and complex two-dimensional layouts.
+
+```css
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto;
+  gap: 20px;
+}
+
+.item-a {
+  grid-column: 1 / 3;  /* spans 2 columns */
+  grid-row: 1;
+}
+
+.item-b {
+  grid-column: 3;
+  grid-row: 1 / 3;  /* spans 2 rows */
+}
+```
+
+| | Flexbox | Grid |
+|---|---|---|
+| Dimensions | 1D (row or column) | 2D (rows and columns) |
+| Best for | Components, alignment | Page layouts, complex structures |
+| Item placement | Flow-based | Explicit position control |
+| Browser support | Excellent | Excellent |
+
+Use **Flexbox** for component-level layouts and **Grid** for page-level layouts. They work very well together.
+
+---
+
+## 15. What is a closure in JavaScript?
+
+A **closure** is a function that retains access to its outer (enclosing) scope even after the outer function has finished executing. Closures are created every time a function is created, and they capture variables from the surrounding lexical scope.
+
+```javascript
+function makeCounter() {
+  let count = 0;  // captured by the inner function
+
+  return function increment() {
+    count++;
+    console.log(count);
+  };
+}
+
+const counter = makeCounter();
+counter(); // 1
+counter(); // 2
+counter(); // 3
+```
+
+Here, `increment` is a closure — it "closes over" the `count` variable. Even though `makeCounter` has returned, `count` persists because the inner function holds a reference to it.
+
+Common use cases: data encapsulation, factory functions, memoization, and event handlers that need access to outer state.
+
+<YouTube videoId="6Ixyltr8_R0" />
+
+---
+
+## 16. What is event delegation in JavaScript?
+
+**Event delegation** is a technique where instead of attaching an event listener to each individual child element, you attach a single listener to a parent element and use the event's `target` property to determine which child triggered the event.
+
+This works because events **bubble** up through the DOM — when you click a `<li>`, the click event also fires on its parent `<ul>`, and then on `<body>`, and so on.
+
+```javascript
+// Instead of this (attaching to each item):
+document.querySelectorAll('li').forEach(item => {
+  item.addEventListener('click', handleClick);
+});
+
+// Use event delegation (one listener on the parent):
+document.querySelector('ul').addEventListener('click', function(event) {
+  if (event.target.tagName === 'LI') {
+    console.log('Clicked item:', event.target.textContent);
+  }
+});
+```
+
+Benefits:
+- **Better performance** — fewer event listeners in memory
+- **Works for dynamic elements** — items added after page load are automatically handled
+- **Simpler code** — one handler instead of many
+
+---
+
+## 17. What is a Promise in JavaScript?
+
+A **Promise** is an object representing the eventual completion (or failure) of an asynchronous operation. It can be in one of three states: **pending**, **fulfilled**, or **rejected**.
+
+```javascript
+const promise = new Promise((resolve, reject) => {
+  const num = Math.random();
+  if (num >= 0.5) {
+    resolve("Promise is fulfilled!");
+  } else {
+    reject("Promise failed!");
+  }
+});
+
+function handleResolve(value) { console.log(value); }
+function handleReject(reason) { console.error(reason); }
+
+promise.then(handleResolve, handleReject);
+// Promise is fulfilled!
+// or
+// Promise failed!
+```
+
+Promises provide a cleaner alternative to nested callbacks ("callback hell") and can be chained:
+
+```javascript
+fetch('/api/user')
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error(error))
+  .finally(() => console.log('Done'));
+```
+
+<YouTube videoId="Xs1EMmBLpn4" />
+
+---
+
+## 18. How do you optimize website assets?
+
+Asset optimization reduces page load time and improves performance. Key strategies include:
+
+**Images:**
+- Use modern formats like **WebP** or **AVIF** instead of PNG/JPEG
+- Apply **lazy loading** (`loading="lazy"`) for below-the-fold images
+- Serve appropriately sized images using `srcset` and `sizes`
+- Use image CDNs for automatic optimization
+
+**JavaScript:**
+- **Minify** and **bundle** files (Webpack, Vite, esbuild)
+- Use **tree shaking** to remove unused code
+- Apply **code splitting** and load non-critical scripts with `defer` or `async`
+- Cache assets with long-lived cache headers and content hashes in filenames
+
+**CSS:**
+- Minify CSS files
+- Remove unused CSS (PurgeCSS)
+- Inline **critical CSS** in `<head>` to avoid render-blocking
+
+**General:**
+- Enable **gzip** or **Brotli** compression on the server
+- Use a **CDN** to serve assets from locations closer to users
+- Set appropriate **cache headers**
+- Reduce the number of HTTP requests by combining resources
+
+---
+
+## 19. What are service workers?
+
+A **service worker** is a script that runs in the background, separate from the main browser thread, acting as a programmable network proxy between the browser and the network. Service workers are a key technology behind **Progressive Web Apps (PWAs)**.
+
+Key capabilities:
+- **Offline support** — intercept network requests and serve cached responses
+- **Background sync** — defer actions until network connectivity is restored
+- **Push notifications** — receive and display notifications from the server
+- **Pre-caching** — cache critical assets during installation for instant loading
+
+```javascript
+// Registering a service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(registration => console.log('SW registered:', registration))
+    .catch(error => console.error('SW registration failed:', error));
+}
+
+// Inside sw.js — caching on install
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open('v1').then(cache => cache.addAll([
+      '/',
+      '/styles.css',
+      '/app.js',
+    ]))
+  );
+});
+
+// Intercept fetch requests
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request).then(response => response || fetch(event.request))
+  );
+});
+```
+
+Service workers only work over HTTPS (or `localhost`) and have no access to the DOM.
+
+---
+
+## 20. What is the Same-Origin Policy?
+
+The **Same-Origin Policy (SOP)** is a security mechanism built into browsers that restricts how a document or script from one **origin** can interact with resources from a different origin. An origin is defined as the combination of **protocol + domain + port**.
+
+For example, `https://example.com:443` and `http://example.com:80` are considered different origins.
+
+The policy prevents malicious scripts on one page from accessing sensitive data on another page (e.g., stealing cookies or session tokens).
+
+**CORS (Cross-Origin Resource Sharing)** is the standard mechanism to relax SOP restrictions in a controlled way. Servers opt-in by sending appropriate HTTP headers:
+
+```http
+Access-Control-Allow-Origin: https://trusted-site.com
+Access-Control-Allow-Methods: GET, POST
+Access-Control-Allow-Headers: Content-Type
+```
+
+Other ways to work around SOP:
+- **JSONP** (legacy, GET requests only)
+- **PostMessage API** (for cross-origin iframes)
+- **Proxy server** (server-to-server requests are not subject to SOP)
+
+<YouTube videoId="4KHiSt0oLJ0" />

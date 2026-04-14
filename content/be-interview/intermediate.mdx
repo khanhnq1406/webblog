@@ -1,0 +1,115 @@
+---
+title: "Intermediate Level"
+description: "Intermediate backend topics: caching, queues, CI/CD, encryption, rate limiting"
+category: "be-interview"
+tags: ["caching", "message-queue", "cicd", "encryption", "rate-limiting"]
+date: "2024-01-01"
+---
+
+# Intermediate Level
+
+## 17. Describe how you would implement a full-text search in a database
+
+You can use the native full-text search functionality of a database, such as MySQL, PostgreSQL or even ElasticSearch.
+
+However, if you want to implement it yourself, the steps would be:
+
+- Preprocessing the text data to be searched and normalizing it by applying tokenization, stemming and removing stop words.
+- Then, implement an inverted index, somehow relating each unique word to the records that contain that word.
+- Create a search UI and normalize the input from the user in the same way the text data was normalized.
+- Then, search for each word in the database.
+- Sort the results by implementing a scoring logic based on different aspects, such as word frequency.
+
+## 18. How would you approach batch processing in a data-heavy backend application?
+
+The best option here would be to use a batch-processing framework such as Hadoop or Spark. They are already prepared to process massive amounts of data in parallel.
+
+Note: Batch processing refers to a method of processing large volumes of data or tasks in predefined sets, called batches, rather than processing them individually or in real-time. In batch processing, data is accumulated or collected over a period of time, and then processed as a group. This approach allows for efficient and automated processing of repetitive tasks, such as billing, generating reports, or updating database records.
+
+## 19. Can you explain the use and benefits of a message queue in a distributed system?
+
+A message queue in a distributed system can act as the core component of a reactive architecture. Each service can trigger and listen for events coming from the queue. That way, when the events arrive, those services can react to them without having to actively poll other services for a response.
+
+![Message queue diagram](https://assets.roadmap.sh/guest/message-queue-yw7on.png)
+
+![RabbitMQ diagram](https://toidicodedao.com/wp-content/uploads/2019/09/rabbitmq-beginners-updated.png)
+
+## 20. What strategies would you use to manage database connections in a high-load scenario?
+
+During a high-load scenario, there are several things a developer can do to improve the performance of the database connection:
+
+- Using connection pools to reuse connections reduces the time required to establish a new one.
+- Load balancing the database traffic (the queries) between a group of databases would help distribute the load.
+- Even optimizing your queries can reduce the time you're using each connection, helping you optimize the use of resources and minimizing the time you're spending with each active connection.
+
+## 21. How would you set up a continuous integration/continuous deployment (CI/CD) pipeline for backend services?
+
+There are multiple considerations to have while setting up Continuous Integration and Continuous Delivery pipelines:
+
+- **Using source control** as the trigger for the entire process (git for example). The build pipelines for your backend services should get executed when you push your code into a specific branch.
+- **Pick the right CI/CD** platform for your needs, there are many out there such as GitHub Actions, GitLab CI/CD, CircleCI and more.
+- Make sure you have **automated unit tests** that can be executed inside these pipelines.
+- **Automatic deployment** should happen only if all tests are executed successfully, otherwise, the pipeline should fail, preventing broken code from reaching any environment.
+- **Use an artifact repository** such as JFrog Artifactory or Nexus Repository to store successfully built services.
+- Finally, consider setting up a **rollback strategy** in case something goes wrong and the final deployed version of your service is corrupted somehow.
+
+## 22. Can you describe a distributed caching strategy for a high-availability application?
+
+In this scenario, you have to consider the following points:
+
+- Implement a cluster of servers that will all act as the distributed cache. Implement a data sharding process to evenly distribute the data amongst all cache servers and make sure it uses a consistent hashing algorithm to minimize cache reorganization when a server joins or leaves the cluster.
+- Add cache replication to have redundancy of your data in case of a failure, that way, your distributed cache is fault-tolerant as well.
+- Cache invalidation is a must on any caching solution, as your data will become stale if you don't update it often.
+
+![Distributed cache diagram](https://miro.medium.com/v2/resize:fit:1400/1*vk3QmP_zG13D6JwqM9ZNMw.png)
+
+## 23. What methods can you use for managing background tasks in your applications?
+
+There are many reasons to need a background job processing mechanism in your application which is often because the job takes longer than that we can handle it in the context of a http request-response communication.
+
+For example, generating a report and publishing the results that takes a lot of time which makes it nearly impossible to use http request-response to do the job or running a batch processing job every time a certain file is uploaded to Dropbox again is an example of where using background job processing comes handy.
+
+It highly depends on your tech stack and what those background tasks are doing. And because of that, there are many options:
+
+- Using task queues such as RabbitMQ or Amazon SQS. These will let you have workers in the background as secondary processes while your application continues working.
+- There are background job frameworks such as Celery for Python or Sidekiq for Ruby.
+- You can also just rely on cron jobs if you want.
+- If your programming language permits it, you can also use threads or workers to run these tasks in the background but within the same application.
+
+> Quick example with bull in Node.js [here](https://dev.to/mohsenkamrani/nodejs-background-job-processing-with-bull-basics-4633)
+
+## 24. How do you handle data encryption and decryption in a privacy-focused application?
+
+For this type of application, you have to distinguish between "data at rest" and "data in transit". The first one describes your data while it's stored in your database (or any data storage you have). And the latter (data in transit) describes your data while it's traveling between backend services or even between the server and the client.
+
+For **"data in transit",** you should be ensuring that connection happens inside a secure and encrypted channel such as HTTPS.
+
+And for **"data at rest"** use strong encryption algorithms such as AES, RSA or ECC and make sure to keep their associated keys somewhere safe, such as inside a dedicated secrets management tool or key management services (KMS).
+
+## 25. What are webhooks and how have you implemented them in past projects?
+
+Webhooks are user-defined HTTP callbacks, they are triggered by a specific event inside a system. They're mainly used to notify about result of multi-step, asynchronous tasks to avoid keeping an open HTTP connection.
+
+As for the implementation of a webhook, consider the following:
+
+- **Event definition.** Make sure to define exactly what events will trigger the message to the webhook and the type of payload associated with those events.
+- **Endpoint creation.** Based on the previous step, define an HTTP endpoint that can deal with the expected request (especially with the payload part). In other words, if you're receiving data in the webhook request, make sure to create the endpoint as a POST endpoint, otherwise you can use a GET one.
+- **Security.** Remember to implement some form of security measures around your webhook endpoint so it can't be exploited.
+
+## 26. What considerations must be taken into account for GDPR compliance in a backend system?
+
+The following are key considerations to be taken into account:
+
+- **Capture only what you need and what you told your users you'd capture.** Remember that to comply with GDPR (General Data Protection Regulation), you have to ask for your user's consent to collect their data, and you have to specify the actual data points you're collecting. So focus on those and nothing else.
+- **Secure your data.** As part of the regulations, you have to make sure your data is secured both in transit and at rest. There are regular security audits that have to happen to ensure security is kept high.
+- **The user has rights over the data you've captured,** so make sure you give them the right endpoints or services to read it, edit it or even remove it if they want.
+
+## 27. Explain how you would deal with long-running processes in web requests
+
+For web requests that trigger long-running processes, the best option is to implement a reactive architecture. This means that when a service receives a request, it will transform it into a message inside a message queue, and the long-running process will pick it up whenever it's ready to do so.
+
+In the meantime, the client sending this request receives an immediate response acknowledging that the request is being processed. The client itself can also be connected to the message queue (or through a proxy) and waiting for a "ready" event with its payload inside.
+
+![Long-running process diagram](https://assets.roadmap.sh/guest/long-running-sn5fc.png)
+
+## 28. Discuss the implementation of rate limiting to protect APIs from abuse

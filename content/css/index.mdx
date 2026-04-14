@@ -1,0 +1,69 @@
+---
+title: "CSS Cheatsheet"
+description: "Quick reference for CSS techniques and modern features"
+category: "css"
+tags: ["css", "animation", "cheatsheet"]
+date: "2024-01-01"
+---
+
+# CSS Cheatsheet
+
+## Animation timing linked to the scroll position
+
+Link animation playback to the user's scroll position using `animation-timeline` and `animation-range`.
+
+```css
+.text-scrolling {
+  animation: 1s ease-in both;
+  /* animation timing linked to the scroll position */
+  animation-timeline: view();
+  /* starting the animation when the element enters the view */
+  animation-range: entry;
+}
+```
+
+### How it works
+
+- `animation-timeline: view()` — ties the animation to the element's visibility in the viewport
+- `animation-range: entry` — plays the animation as the element enters the view
+- Requires no JavaScript — pure CSS scroll-driven animations
+
+## Flexbox Quick Reference
+
+```css
+.container {
+  display: flex;
+  flex-direction: row;        /* row | column | row-reverse | column-reverse */
+  justify-content: center;    /* flex-start | flex-end | center | space-between | space-around */
+  align-items: center;        /* flex-start | flex-end | center | baseline | stretch */
+  flex-wrap: wrap;            /* nowrap | wrap | wrap-reverse */
+  gap: 1rem;
+}
+```
+
+## CSS Grid Quick Reference
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto;
+  gap: 1rem;
+  place-items: center;
+}
+```
+
+## Custom Properties (CSS Variables)
+
+```css
+:root {
+  --color-primary: #2563eb;
+  --color-bg: #fafafa;
+  --font-size-base: 1rem;
+}
+
+.button {
+  background-color: var(--color-primary);
+  font-size: var(--font-size-base);
+}
+```

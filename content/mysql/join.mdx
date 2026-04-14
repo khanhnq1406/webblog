@@ -1,0 +1,88 @@
+---
+title: "SQL Joins"
+description: "Complete guide to SQL joins: INNER, LEFT, RIGHT, FULL OUTER, and SELF joins"
+category: "mysql"
+tags: ["mysql", "joins", "sql", "inner-join", "left-join"]
+date: "2024-01-01"
+---
+
+## Introduction
+
+### What is join in SQL?
+
+A JOIN concept which is basically a clause used to combine rows from different tables based on a condition.
+
+---
+
+## Types of JOIN in SQL
+
+- INNER JOIN
+- LEFT JOIN
+- RIGHT JOIN
+- Full OUTER JOIN
+- SELF JOIN
+
+![Visual SQL JOINS](https://ugoproto.github.io/ugodoc/img/introduction_to_sql_joins/Visual_SQL_JOINS_V2.png)
+
+<YouTube videoId="Yh4CrPHVBdE" />
+
+---
+
+## INNER JOIN
+
+The INNER JOIN helps to select the matching records from the both tables.
+
+![SQLite Inner Join Example](https://www.sqlitetutorial.net/wp-content/uploads/2015/12/SQLite-Inner-Join-Example.png)
+
+```sql
+SELECT fname, acnumber FROM customer
+INNER JOIN account
+ON customer.custid = account.custid;
+
+SELECT count(fname) FROM customer
+INNER JOIN account
+ON customer.custid = account.custid;
+```
+
+---
+
+## LEFT JOIN
+
+The LEFT JOIN helps to fetch all records from the left table and the matching records from the right table.
+
+![SQLite Left Join Example](https://www.sqlitetutorial.net/wp-content/uploads/2015/12/SQLite-left-join-example.png)
+
+---
+
+## RIGHT JOIN
+
+The RIGHT JOIN helps to fetch all records from the right table and the matched records from the left table.
+
+![SQL Right Join Example](https://www.pragimtech.com/blog/contribute/article_images/1220210728013442/sql-right-join-example.jpg)
+
+---
+
+## FULL JOIN
+
+The FULL OUTER JOIN helps to fetch all the records from both the table whether there is a match or not.
+
+```sql
+SELECT * FROM Customers
+FULL OUTER JOIN Orders
+ON Customers.customer_id = Orders.customer;
+```
+
+![Full Outer Join in SQL](https://www.programiz.com/sites/tutorial2program/files/full-outer-join-in-sql-1.png)
+
+---
+
+## SELF JOIN
+
+A self join helps to join a table with itself.
+
+```sql
+SELECT e1.name, e2.name
+FROM employees e1
+JOIN employees e2
+ON e1.manager_id = e2.employee_id;
+```

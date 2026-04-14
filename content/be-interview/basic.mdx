@@ -1,0 +1,268 @@
+---
+title: "Basic Level"
+description: "Fundamental backend concepts: APIs, databases, HTTP, and security"
+category: "be-interview"
+tags: ["api", "rest", "sql", "nosql", "http", "backend"]
+date: "2024-01-01"
+---
+
+# Basic Level
+
+## 1. Explain what an API endpoint is?
+
+An API endpoint is a specific URL that acts as an entry point into a specific service or a functionality within a service.
+
+Through an API endpoint, client applications can interact with the server sending requests (sometimes even with data in the form of payload) and receive a response from it.
+
+Usually, each endpoint can be mapped to a single feature inside the server.
+
+For example, when an application calls the API at the URL "https://abc.com/foo/bar", /foo/bar is the endpoint.
+
+## 2. Can you explain the difference between SQL and NoSQL databases?
+
+Source: [Difference between SQL and NoSQL](https://www.geeksforgeeks.org/difference-between-sql-and-nosql/)
+
+### Main differences between NoSQL and SQL
+
+#### Type
+
+SQL databases are primarily called Relational Databases (RDBMS); whereas NoSQL databases are primarily called non-relational or distributed databases.
+
+#### Language
+
+SQL databases define and manipulate data-based structured query language (SQL). Seeing from a side this language is extremely powerful. SQL is one of the most versatile and widely-used options available which makes it a safe choice, especially for great complex queries. But from another side, it can be restrictive. SQL requires you to use predefined schemas to determine the structure of your data before you work with it. Also, all of your data must follow the same structure. This can require significant up-front preparation which means that a change in the structure would be both difficult and disruptive to your whole system.
+
+A NoSQL database has a dynamic schema for unstructured data. Data is stored in many ways which means it can be **document-oriented, column-oriented, graph-based, or organized as a key-value store.** This flexibility means that documents can be created without having a defined structure first. Also, each document can have its own unique structure. The syntax varies from database to database, and you can add fields as you go.
+
+#### Scalability
+
+In almost all situations SQL databases are vertically scalable. This means that you can increase the load on a single server by increasing things like RAM, CPU, or SSD. But on the other hand, NoSQL databases are horizontally scalable. This means that you handle more traffic by sharing, or adding more servers in your NoSQL database. It is similar to adding more floors to the same building versus adding more buildings to the neighborhood. Thus NoSQL can ultimately become larger and more powerful, making these databases the preferred choice for large or ever-changing data sets.
+
+#### Structure
+
+SQL databases are table-based, on the other hand NoSQL databases are either key-value pairs, document-based, graph databases, or wide-column stores. This makes relational SQL databases a better option for applications that require multi-row transactions such as an accounting system or for legacy systems that were built for a relational structure.
+
+#### Property followed
+
+SQL databases follow ACID properties (Atomicity, Consistency, Isolation, and Durability) whereas the NoSQL database follows the Brewers CAP theorem (Consistency, Availability, and Partition tolerance).
+
+### When To Use: SQL vs NoSQL
+
+While NoSQL is good when the availability of big data is more crucial, SQL is valued for ensuring data validity.
+
+### Key Highlights on SQL vs NoSQL
+
+| SQL | NoSQL |
+|-----|-------|
+| RELATIONAL DATABASE MANAGEMENT SYSTEM (RDBMS) | Non-relational or distributed database system. |
+| These databases have fixed or static or predefined schema | They have a dynamic schema |
+| These databases are not suited for hierarchical data storage. | These databases are best suited for hierarchical data storage. |
+| These databases are best suited for complex queries | These databases are not so good for complex queries |
+| Vertically Scalable | Horizontally scalable |
+| Follows ACID property | Follows CAP (consistency, availability, partition tolerance) |
+| Examples: MySQL, PostgreSQL, Oracle, MS-SQL Server, etc | Examples: MongoDB, HBase, Neo4j, Cassandra, etc |
+
+## 3. What is a RESTful API, and what are its core principles?
+
+Reference: [What is a REST API?](https://www.redhat.com/en/topics/api/what-is-a-rest-api)
+
+A REST API is an application programming interface (API) that follows the design principles of the REST architectural style. REST is short for representational state transfer, and is a set of rules and guidelines about how you should build a web API.
+
+When a client request is made via a RESTful API, it transfers a representation of the state of the resource to the requester or endpoint. This information, or representation, is delivered in one of several formats via HTTP: JSON (Javascript Object Notation), HTML, XLT, Python, PHP, or plain text. JSON is the most generally popular file format to use because, despite its name, it's language-agnostic, as well as readable by both humans and machines.
+
+Something else to keep in mind: Headers and parameters are also important in the HTTP methods of a RESTful API HTTP request, as they contain important identifier information as to the request's metadata, authorization, uniform resource identifier (URI), caching, cookies, and more. There are request headers and response headers, each with their own HTTP connection information and status codes.
+
+For an API to be RESTful (which means it complies with the REST guidelines), it needs to:
+
+- It needs to follow a client-server architecture (which all HTTP-based services do).
+- It has to provide a uniform interface which means:
+  - There should be a way to identify resources from each other through URIs (Unique Resource Identification).
+  - There should be a way to modify resources through their representation.
+  - Messages should be self descriptive, meaning that each message should provide enough information to understand how to process it.
+- It needs to be stateless, which means each request to the server must contain all information to process the request.
+- It should be a layered system, meaning that client and server don't have to be connected directly to each other, there might be intermediaries, but that should not affect the communication between client and server.
+- Resources should be cacheable either by client or by server.
+- Optionally, the server could send code to the client for it to execute (known as "Code on Demand").
+
+![REST API](https://cdn.prod.website-files.com/6407b983039e75f8fc39d439/6482a89d6590cb2cc5b84546_rest_api.png)
+
+![REST API diagram](https://librarycarpentry.org/lc-fair-research/fig/rest-api.png)
+
+## 4. Can you describe a typical HTTP request/response cycle?
+
+The HTTP protocol is very structured and consists of a very well-defined set of steps:
+
+- **Open the connection.** The client opens a TCP connection to the server. The port will be port 80 for HTTP connections and 443 for HTTPS (secured) connections.
+- **Send the request.** The client will now send the HTTP request to the server. The request contains the following information:
+  - An [HTTP method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods). It can be any of them (i.e. GET, POST, PUT, DELETE, etc).
+  - A URI (or Uniform Resource Identifier). This specifies the location of the resources on the server.
+  - The HTTP version (usually HTTP/1.1 or HTTP/2).
+  - A set of headers. They include extra data related to the request; there is a [full list of HTTP headers](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers) that can be used here.
+  - The optional body. Depending on the type of request, you'll want to also send data, and the data is encoded inside the body of the request.
+- **Request processed by the server.** At this stage, the server will process the request and prepare a response.
+- **Send the HTTP response back to the client.** Through the open channel, the server sends back an HTTP response. The response will contain the following elements:
+  - The HTTP Version.
+  - The status code. There is a list of [potential status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status) that describe the result of the request.
+  - A set of headers with extra data.
+  - The optional body, just like with the request, the body of the response is optional.
+- **The connection is closed.** This is usually the last step, although with newer versions of the protocol, there are options to leave the channel open and continue sending requests and responses back and forth.
+
+![HTTP request/response cycle](https://cdn.hashnode.com/res/hashnode/image/upload/v1712395675541/bab13ff8-4f20-4def-9bc2-6aa4aad02b2f.png?auto=compress,format&format=webp)
+
+## 5. How would you handle file uploads in a web application?
+
+From a backend developer perspective, the following considerations should be taken into account when handling file uploads regardless of the programming language you're using:
+
+- **Perform server-side validations.** Validate that the size of your file is within range, and that the file is of the required type. You can check [this OWASP guide](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) for more details.
+- **Use secure channels.** Make sure the file upload is done through an HTTPS connection.
+- **Avoid name collision.** Rename the file ensuring the new filename is unique within your system. Otherwise this can lead to application errors by not being able to save the uploaded files.
+- **Keep metadata about your files.** Store it in your database or somewhere else, but make sure to keep track of it, so you can provide extra information to your users. Also, if you're renaming the files for security and to avoid name collisions, keep track of the original filename in case the file needs to be downloaded back by the user.
+
+## 6. What kind of tests would you write for a new API endpoint?
+
+As backend developers, we have to think about the types of tests that there are out there.
+
+- **Unit tests:** Always remember to only test the relevant logic through the public interface of your code (avoid testing private methods or inaccessible functions inside your modules). Focus on the business logic and don't try to test the code that uses external services (like a database, the disk or anything outside of the piece of code you're testing).
+- **Integration tests:** Test the full endpoint through its public interface (the actual HTTP endpoint) and see how it integrates with the external services it's using (i.e the database, another API, etc).
+- **Load testing / performance testing:** You might want to also check how the new endpoint behaves under heavy stress. This might not be required depending on the API you're using, but as a rule of thumb, it's a good one to perform at the end of the development phase before releasing the new endpoint into prod.
+
+## 7. Describe how session management works in web applications
+
+The following is a high-level overview of how session management works for web applications:
+
+- **The session is created.** This happens with the first interaction with the system by the user (during log-in). The backend of your app will create a unique session ID that will be stored and returned to the user to use in future requests.
+- **Session information storage.** The session data needs to be stored somewhere. Whether it's in-memory, or inside a database, it needs to be indexed by the session ID from the previous point. Here the best option is to use a database (ideally something like Redis with high I/O performance) so that the services can be scaled independently from the session data.
+- **The session ID is sent to the client.** The most common way of doing this is through cookies. The backend can set up a cookie with the session ID and the frontend can read it securely and use that ID however it needs to.
+- **Client sends the session ID.** After the ID is created, the client application will identify itself with the backend using this ID on every request.
+- **Accessing the session data in the backend.** The backend will access the stored session data using the session ID received from the client.
+- **Session is closed.** After a while, or perhaps through a user action, the session ID will be deleted, which will cause the session data to be lost (or removed from the DB). This effectively ends the interactions between the client and the server as part of the existing session.
+
+![Web Sessions diagram](https://hazelcast.com/wp-content/uploads/2021/12/diagram-Web-Sessions.png)
+
+## 8. How do you approach API versioning in your projects?
+
+### Definition
+
+API versioning is the process of managing and tracking changes to an API. It also involves communicating those changes to the API's consumers.
+
+Change is a natural part of API development. Sometimes, developers have to update their API's code to fix security vulnerabilities, while other changes introduce new features or functionality. Some changes do not affect consumers at all, while others, which are known as "breaking changes," lead to backward-compatibility issues, such as unexpected errors and data corruption. API versioning ensures that these changes are rolled out successfully in order to preserve consumer trust while keeping the API secure, bug-free, and highly performant.
+
+### Some types of API versioning
+
+There are several ways in which you can handle API versioning, but the most common ones are:
+
+- **Keeping the version in the URL:** Either as a URL attribute (i.e /your-api/users?v=1) or as part of the URL (i.e /v1/your-api/users). In both situations the version is clearly visible to the developer using the API.
+- **Using a custom header:** Another option is to have a custom header (such as api-version) where the developer must specify the version of your API they intend to use.
+
+> For more details, visit [API versioning](https://www.postman.com/api-platform/api-versioning/)
+
+## 9. How do you protect a server from SQL injection attacks?
+
+There are many ways to protect your relational database from SQL injection attacks, but here are three very common ones.
+
+- **Prepared statements with parameterized queries.** This is probably the most effective way since it's done by a library or framework, and all you have to do is write your queries leaving placeholders for where the data is meant to go, and then, in a separate place, provide the actual data.
+
+- **Use an ORM (Object-Relational Mapping).** These frameworks allow you to abstract the interaction with your database and create the SQL queries for you, taking into account all matters of security around that interaction.
+
+- **Escaping data.** If you want to do this manually, you can take care of escaping special characters that might break how you construct your SQL queries. Keeping a list of blacklisted characters to escape in this situation is a good idea, so you can programmatically go through them.
+
+## 10. Explain the concept of statelessness in HTTP and how it impacts backend services
+
+HTTP is, by design, a stateless protocol, which means that every request is unique and unrelated to any previous request, even from the same client.
+
+This affects backend web services by forcing them to implement their own state management solutions if such a feature is required.
+
+> For more details, visit [Why is HTTP stateless?](https://dev.to/codexam/why-is-http-stateless-2m3p)
+
+## 11. What is containerization, and how does it benefit backend development?
+
+It's a lightweight virtualization method to package applications and their dependencies, ensuring consistent environments across different systems.
+
+It's actually a benefit for backend development because it provides isolation and portability by simplifying deployment processes and reducing conflicts between software versions and configurations.
+
+## 12. What measures would you take to secure a newly developed API?
+
+There are many ways to secure an API, here are some of the most common ones:
+
+- Add an authentication method, such as OAuth, JWT, Bearer tokens, Session-based auth, and others.
+- Use HTTPS to encrypt data transfer between client and server.
+- Configure strong CORS policies to avoid unwanted requests.
+- Setup a strong authorization logic, to ensure clients only access resources they have access to.
+
+## 13. How would you scale a backend application during a traffic surge?
+
+The most common way to scale up a backend application during traffic surges is to have multiple instances of the application behind a load balancer, and when the traffic surge happens, simply add more instances of the application.
+
+This is known as horizontal scaling and works best when the backend application is stateless.
+
+![Scale backend](https://assets.roadmap.sh/guest/scale-backend-amf0h.png)
+
+## 14. What is Load Balancing?
+
+Reference: [What is Load Balancing?](https://aws.amazon.com/what-is/load-balancing/)
+
+### Definition
+
+Load balancing is the method of distributing network traffic equally across a pool of resources that support an application.
+
+A load balancer is a device that sits between the user and the server group and acts as an invisible facilitator, ensuring that all resource servers are used equally.
+
+### What are load balancing algorithms?
+
+Reference: [Load Balancing Algorithms](https://www.geeksforgeeks.org/load-balancing-algorithms/#1-static-load-balancing-algorithms)
+
+A load balancing algorithm is the set of rules that a load balancer follows to determine the best server for each of the different client requests. Load balancing algorithms fall into two main categories.
+
+- **Static load balancing algorithms** follow fixed rules and are independent of the current server state. The following are examples of static load balancing.
+  - **Round Robin.** The Round Robin algorithm is a simple static load balancing approach in which requests are distributed across the servers in a sequential or rotational manner. It is easy to implement but it doesn't consider the load already on a server so there is a risk that one of the servers receives a lot of requests and becomes overloaded.
+
+    ![Round Robin](https://media.geeksforgeeks.org/wp-content/uploads/20240130183312/Round-Robin-(1).webp)
+
+  - **Weighted Round Robin.** The Weighted Round Robin algorithm is also a static load balancing approach which is much similar to the round-robin technique. The only difference is, that each of the resources in a list is provided a weighted score. Depending on the weighted score the request is distributed to these servers.
+
+    ![Weighted Round Robin](https://media.geeksforgeeks.org/wp-content/uploads/20240130183429/Weighted-Round-Robin-(1).webp)
+
+  - **Source IP Hash.** The Source IP Hash Load Balancing Algorithm is a method used in network load balancing to distribute incoming requests among a set of servers based on the hash value of the source IP address. This algorithm aims to ensure that requests originating from the same source IP address are consistently directed to the same server.
+
+- **Dynamic Load Balancing Algorithms.** Dynamic load balancing involves making real-time decisions about how to distribute incoming network traffic or computational workload across multiple servers or resources. This approach adapts to the changing conditions of the system, such as variations in server load, network traffic, or resource availability.
+  - **Least Connection Method.** The Least Connections algorithm is a dynamic load balancing approach that assigns new requests to the server with the fewest active connections. The idea is to distribute incoming workloads in a way that minimizes the current load on each server, aiming for a balanced distribution of connections across all available resources.
+
+    ![Least Connection](https://media.geeksforgeeks.org/wp-content/uploads/20240130183529/Least-Connection-(1).webp)
+
+  - **Weighted response time.** Averages the response time of each server, and combines that with the number of connections each server has open to determine where to send traffic. By sending traffic to the servers with the quickest response time, the algorithm ensures faster service for users.
+
+    ![Least Response](https://media.geeksforgeeks.org/wp-content/uploads/20240130183553/Least-Response-(2).webp)
+
+  - **Resource-based.** Distributes load based on what resources each server has available at the time. Specialized software (called an "agent") running on each server measures that server's available CPU and memory, and the load balancer queries the agent before distributing traffic to that server.
+
+    ![Resource-based](https://media.geeksforgeeks.org/wp-content/uploads/20241111132131504562/resource-based-load-balancing-algorithm.webp)
+
+### What are the types of load balancing?
+
+We can classify load balancing into three main categories depending on what the load balancer checks in the client request to redirect the traffic.
+
+- Application load balancing
+- Network load balancing
+- Global server load balancing
+- DNS load balancing
+
+### What are the types of load balancing technology?
+
+Load balancers are one of two types: hardware load balancer and software load balancer.
+
+## 15. What tools and techniques do you use for debugging a backend application?
+
+If the backend application being debugged is in the local dev machine, a simple solution would be to use the IDE itself. Most modern IDEs, such as IntelliJ, Eclipse and others have integrated debugging capabilities.
+
+If the backend application is on the server though, you'll have to use other techniques, such as logging, which you can do with logging libraries. Or, you can use more complex tools such as JProfiler or NewRelic.
+
+## 16. How do you ensure your backend code is maintainable and easy to understand?
+
+The trick here is to follow best practices and coding standards such as:
+
+- Modularity.
+- Following naming conventions.
+- Adding code comments.
+- Doing regular refactors to keep technical debt under check.
+- Keeping error handling messages consistent throughout the platform.
+- Performing unit tests on all written code.

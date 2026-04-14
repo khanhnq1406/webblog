@@ -1,0 +1,208 @@
+---
+title: "Operators & Commands"
+description: "SQL fundamentals: DDL, DML, DQL, DCL commands and operators"
+category: "mysql"
+tags: ["mysql", "ddl", "dml", "operators", "sql"]
+date: "2024-01-01"
+---
+
+## What is SQL and Getting Started with MySQL
+
+### What is SQL?
+
+- SQL stands for Structured Query Language
+- SQL helps to access and manipulate your databases
+
+### Getting Started with MySQL
+
+#### Data types in MySQL
+
+A data type is an attribute that specifies the type of data that the object can hold: integer data, character data, monetary data, date and time data, binary strings, and so on.
+
+![MySQL Data Types](https://www.mysqltutorial.org/wp-content/uploads/2024/01/mysqldatatypes.jpg)
+
+![CHAR vs VARCHAR](https://www.csestack.org/wp-content/uploads/2018/01/Difference-Between-CHAR-and-VARCHAR.png)
+
+---
+
+## Types of Commands in MySQL
+
+### DDL (Data Definition Language)
+
+- Helps to define the database schema
+- Deals with description of the database
+- Also have power to deal with creating and modifying the structure of database object
+
+Commands:
+
+- **CREATE** — This command is used to create the database. It also have some objects like table, index, function, views, store procedure and triggers
+- **ALTER** — This command is used to modify the existing database
+- **DROP** — This command is used to delete the database
+- **TRUNCATE** — This command is used to delete all the records from the table
+- **COMMENT** — This command is used to add comments to the database
+- **RENAME** — This is used to rename an object existing in the database
+
+#### Example
+
+```sql
+SHOW databases;
+
+CREATE DATABASE demodatabase;
+
+USE demodatabase;
+
+DROP DATABASE demodatabase;
+
+CREATE TABLE student_table(
+    student_id INT,
+    student_name VARCHAR(100),
+    course_name VARCHAR(40)
+);
+
+DESCRIBE student_table;
+
+ALTER TABLE student_table ADD email VARCHAR(100);
+
+TRUNCATE TABLE student_table;
+```
+
+### DML (Data Manipulation Language)
+
+- This DML command handles all the data manipulation part
+- It includes most important parts of the SQL
+
+Commands:
+
+- **INSERT** — This command is used to insert the data into the table
+- **UPDATE** — This command is used to update the data in the table
+- **DELETE** — This command is used to delete the data from the table
+
+#### Example
+
+```sql
+INSERT INTO student_table (student_id, student_name, course_name, email)
+VALUES (1, "Khanh Nguyen", "c1002", "khanh@gmail.com");
+
+UPDATE student_table
+SET student_name = "Khanh", course_name = "c1001"
+WHERE student_id = 1;
+
+DELETE FROM student_table
+WHERE student_id = 1;
+```
+
+### DQL (Data Query Language)
+
+- DQL used to make queries on the data within schema objects
+- The main focus of DQL Command is to get some schema relation based on the query passed into it
+- **SELECT** — This command is use to retrieve all the data from the table
+
+#### Example
+
+```sql
+SELECT student_id FROM student_table;
+
+SELECT student_id, email FROM student_table;
+
+SELECT * FROM student_table;
+```
+
+### DCL (Data Control Language)
+
+- Deals with the rights and permission of the database
+- Works for the controlling part of the data
+- **GRANT** — provide user's access privileges to database
+- **REVOKE** — Helps to withdraw user's access privileges given by using the GRANT command
+
+### TCL (Transaction Control Language)
+
+- Deals with the transaction of the database
+- **COMMIT** — commits a transaction
+- **ROLLBACK** — rollbacks a transaction for any error occurs
+- **SAVEPOINT** — use a save point within a transaction
+- **SET TRANSACTION** — specify the characteristics for the transaction
+
+---
+
+## Operators in MySQL
+
+Operators are also combined with WHERE clause to filter data.
+
+### AND operators
+
+AND operator returns a records if all the condition are TRUE which are separated by AND.
+
+### OR operators
+
+OR operator returns a records if any conditions are TRUE which are separated by OR.
+
+### NOT operators
+
+NOT operator returns a records if conditions are not TRUE.
+
+### IN operators
+
+IN operator can contain multiple values in a WHERE clause. It is also used as short cart for multiple OR conditions.
+
+### BETWEEN operators
+
+BETWEEN operator helps to select values within a given range and those values can be numbers, text, or dates.
+
+```sql
+SELECT * FROM student_table;
+
+SELECT * FROM student_table
+WHERE course_name = "c1001";
+
+SELECT * FROM student_table
+WHERE student_id = 1 AND course_name = "c1005";
+
+SELECT * FROM student_table
+WHERE student_id = 1 OR course_name = "c1005";
+
+SELECT * FROM student_table
+WHERE NOT student_name = "Khanh Nguyen";
+
+SELECT * FROM student_table
+WHERE course_name IN ("c1002", "c1005");
+
+SELECT * FROM student_table
+WHERE student_id BETWEEN 1 AND 2;
+```
+
+---
+
+## Filter records in MySQL
+
+WHERE clause is used to filter the record from the data.
+
+---
+
+## Pattern matching in MySQL
+
+### LIKE
+
+LIKE Operators are used with WHERE clause to find the pattern from the database.
+
+Example:
+
+```sql
+SELECT * FROM student_table
+WHERE email LIKE '%k%';
+
+SELECT * FROM student_table
+WHERE student_name LIKE '%nguyen%';
+```
+
+---
+
+## Null values in MySQL
+
+When you have a filed with null value then they will be a option for you to insert new record or update record without adding a value.
+
+Example:
+
+```sql
+SELECT * FROM student_table
+WHERE email is null;
+```
